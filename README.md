@@ -5,8 +5,6 @@ a YouTube playlist — pick one and it plays straight through.
 
 **Live at [maro-rajasthan.vercel.app](https://maro-rajasthan.vercel.app)**
 
-Built as a study of the [deluxesaloon.space](https://www.deluxesaloon.space)
-format, restyled around Rajasthani music.
 
 ## Running it
 
