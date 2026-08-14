@@ -737,7 +737,10 @@ export default function SceneBackdrop({ scene = "night", theme = "thar-dhora" })
   const Scene = SCENES[t.slug] || TharDunes;
 
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+      data-scene={t.slug}
+    >
       <svg
         viewBox="0 0 1440 900"
         preserveAspectRatio="xMidYMid slice"

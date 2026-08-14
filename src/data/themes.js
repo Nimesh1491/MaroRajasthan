@@ -60,12 +60,17 @@ export function themeBySlug(slug) {
 }
 
 /**
- * Which backdrop is showing at a given moment.
+ * Which backdrop is showing.
  *
- * Derived from the clock rather than held in state, so the server and the
- * browser always agree on the first paint, every visitor sees the same place at
- * the same time, and a reload does not restart the sequence.
+ * The slide number comes from the clock, so the sequence keeps turning over on
+ * its own every ten minutes and a reload does not restart it. `offset` is drawn
+ * fresh on each page load, so you get a different place each time you arrive
+ * rather than always opening on the same one.
+ *
+ * The server renders with offset 0, which keeps the first paint deterministic;
+ * the browser picks its own offset on mount and the change is crossfaded.
  */
-export function themeForTime(ms = Date.now()) {
-  return THEMES[Math.floor(ms / SLIDE_MS) % THEMES.length];
+export function themeForTime(ms = Date.now(), offset = 0) {
+  const slide = Math.floor(ms / SLIDE_MS);
+  return THEMES[(((slide + offset) % THEMES.length) + THEMES.length) % THEMES.length];
 }

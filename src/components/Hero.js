@@ -5,7 +5,7 @@ import Link from "next/link";
 import SceneBackdrop from "./SceneBackdrop";
 import StationMark from "./StationMark";
 import { useStation } from "./Station";
-import { SLIDE_MS, themeForTime } from "@/data/themes";
+import { THEMES, themeForTime } from "@/data/themes";
 import { greetingForHour, indianNumber, istParts, sceneForHour } from "@/lib/ist";
 
 /**
@@ -27,28 +27,34 @@ export default function Hero({ initial, collections }) {
   const station = useStation();
   const [now, setNow] = useState(initial);
   const [count, setCount] = useState(null);
-  // The backdrop is a slideshow on a ten-minute turn. `theme` is what is
-  // showing; `outgoing` is the one it is fading over, cleared once the
-  // crossfade has finished.
-  const [theme, setTheme] = useState(() => themeForTime(initial.at).slug);
+  // The backdrop is a slideshow on a ten-minute turn, starting from a place
+  // picked fresh on each load. `theme` is what is showing; `outgoing` is the
+  // one it is fading over, cleared once the crossfade has finished.
+  const [offset, setOffset] = useState(0);
+  const [theme, setTheme] = useState(() => themeForTime(initial.at, 0).slug);
   const [outgoing, setOutgoing] = useState(null);
 
   useEffect(() => {
-    const tick = () => {
+    // Drawn here rather than during render: the server has no way to agree with
+    // it, and a first client render that disagreed would be a hydration error.
+    const pick = Math.floor(Math.random() * THEMES.length);
+    setOffset(pick);
+
+    const tick = (off) => {
       const d = new Date();
       const p = istParts(d);
       setNow({ clock: p.clock, date: p.date, hour: p.hour24 });
       setCount(listenerCount(d));
 
-      const next = themeForTime(d.getTime()).slug;
+      const next = themeForTime(d.getTime(), off).slug;
       setTheme((cur) => {
         if (cur === next) return cur;
         setOutgoing(cur);
         return next;
       });
     };
-    tick();
-    const id = setInterval(tick, 15000);
+    tick(pick);
+    const id = setInterval(() => tick(pick), 15000);
     return () => clearInterval(id);
   }, []);
 

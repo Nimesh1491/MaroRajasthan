@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- The station mark: a kamaicha in a scalloped lac medallion, the way a
+       shop sign in Jodhpur would paint it. Matches components/StationMark.js. -->
+  <g transform="translate(50 50)">
+    <g fill="#c3183a">
+      <circle cx="43" cy="0" r="8.5"/>
+      <circle cx="39.72" cy="16.46" r="8.5"/>
+      <circle cx="30.41" cy="30.41" r="8.5"/>
+      <circle cx="16.46" cy="39.72" r="8.5"/>
+      <circle cx="0" cy="43" r="8.5"/>
+      <circle cx="-16.46" cy="39.72" r="8.5"/>
+      <circle cx="-30.41" cy="30.41" r="8.5"/>
+      <circle cx="-39.72" cy="16.46" r="8.5"/>
+      <circle cx="-43" cy="0" r="8.5"/>
+      <circle cx="-39.72" cy="-16.46" r="8.5"/>
+      <circle cx="-30.41" cy="-30.41" r="8.5"/>
+      <circle cx="-16.46" cy="-39.72" r="8.5"/>
+      <circle cx="0" cy="-43" r="8.5"/>
+      <circle cx="16.46" cy="-39.72" r="8.5"/>
+      <circle cx="30.41" cy="-30.41" r="8.5"/>
+      <circle cx="39.72" cy="-16.46" r="8.5"/>
+    </g>
+    <circle r="44" fill="#c3183a"/>
+    <circle r="39" fill="#16110e"/>
+    <circle r="36" fill="none" stroke="#e8ab2e" stroke-width="2"/>
+    <!-- Heavier strokes than the on-page StationMark: at 16px a 3px bow and a
+         7px neck vanish into the disc. Thickening them keeps the instrument
+         readable in a browser tab without changing the silhouette. -->
+    <g transform="rotate(-28)">
+      <circle cx="0" cy="12" r="17" fill="#f6e8d0"/>
+      <circle cx="0" cy="12" r="5.5" fill="#c3183a"/>
+      <rect x="-4.5" y="-31" width="9" height="36" rx="3" fill="#f6e8d0"/>
+      <rect x="-8.5" y="-34.5" width="17" height="8.5" rx="3.5" fill="#e8ab2e"/>
+    </g>
+    <rect x="-32" y="-2.6" width="64" height="5.2" rx="2.6" fill="#e8ab2e" transform="rotate(34)"/>
+  </g>
+</svg>
