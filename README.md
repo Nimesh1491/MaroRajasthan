@@ -3,8 +3,7 @@
 A free station that plays Rajasthani folk. Four collections, each read live from
 a YouTube playlist — pick one and it plays straight through.
 
-Built as a study of the [deluxesaloon.space](https://www.deluxesaloon.space)
-format, restyled around Rajasthani music.
+Built as a study of the [[maro-rajasthan.vercel.app](https://maro-rajasthan.vercel.app) format, restyled around Rajasthani music.
 
 ## Running it
 
