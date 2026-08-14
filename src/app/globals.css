@@ -60,6 +60,26 @@ body {
   animation: lamp-glow 4.5s ease-in-out infinite;
 }
 
+/* The backdrop slideshow: an arriving scene fades in over the outgoing one. */
+@keyframes scene-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.scene-fade {
+  animation: scene-fade 2s ease-in-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-fade {
+    animation-duration: 0.01ms;
+  }
+}
+
 @keyframes twinkle {
   0%,
   100% {

@@ -160,15 +160,47 @@ function Chhatri({ x, y, s = 1, base, p }) {
   );
 }
 
+/**
+ * A dromedary, in side view, facing left. Built from separate parts rather than
+ * one blob: far legs behind the body, then barrel and hump, then the neck
+ * sweeping up to a small head, then the near legs. The proportions that make it
+ * read as a camel and not a horse are the long legs, the deep chest, the single
+ * hump set back, and the neck leaving the chest low and rising in an S.
+ */
+/**
+ * A dromedary in side view, facing left, drawn as one continuous outline.
+ *
+ * The proportions that decide whether this reads as a camel rather than a horse
+ * are, in order: a deep brisket that drops below the belly line, a neck that
+ * leaves the top of that chest and rises in a shallow S, a single hump set back
+ * over the barrel, and legs long enough to look ungainly. An earlier version
+ * built from separate body/neck/head shapes read as a blob with a stick on it,
+ * because the chest was missing and the neck met a hollow.
+ */
+const CAMEL_OUTLINE =
+  "M-19 0 L-17 -12 C-16.5 -16.5 -17.5 -19 -18 -21.5 C-22 -22.8 -25.2 -25.2 -26.2 -29.5 " +
+  "C-27.2 -34 -28.2 -39 -30.2 -44 C-32.8 -50 -35.8 -55.5 -37.8 -59.5 " +
+  "C-39.3 -62.8 -42.3 -66 -45.8 -65.5 C-49.3 -65 -52.3 -62.5 -53.3 -60 " +
+  "C-54.1 -58 -52.3 -56.5 -49.8 -56.8 C-46.8 -57.2 -43.8 -56 -41.8 -54.5 " +
+  "C-38.3 -51.5 -34.8 -47.5 -30.8 -42.5 C-25.8 -37 -19.3 -34.5 -13.3 -35 " +
+  "C-7.3 -35.5 -3.3 -41.5 -0.8 -47.5 C1.7 -53.5 6.7 -55.5 9.7 -51 " +
+  "C12.2 -47 13.7 -42.5 15.7 -39.5 C18.7 -36.5 21.7 -34.5 23.2 -31.5 " +
+  "C24.7 -28.5 25 -25.5 24.2 -23 L21.7 -23 C22.2 -17.5 22.7 -14.5 21.2 -11.5 " +
+  "L18.7 0 L15.2 0 L17.7 -11.5 C18.7 -15.5 18.2 -19 17.7 -22.5 " +
+  "C8 -21 -2 -21 -11 -22 L-9.5 -12 L-13 0 Z";
+
 function Camel({ x, y, s = 1, fill }) {
+  const far = shade(fill, 0.3);
   return (
-    <g transform={`translate(${x} ${y}) scale(${s})`} fill={fill}>
-      <path d="M-24 0 v-14 q0 -10 8 -12 q4 -12 12 -12 q8 0 11 10 q7 -2 9 6 l3 22 h-6 l-3 -16 l-22 2 l-2 14 Z" />
-      <path d="M-20 0 l-2 16 h4 l3 -16 Z" />
-      <path d="M-12 0 l-1 15 h3 l2 -15 Z" />
-      <path d="M14 0 l2 16 h4 l-2 -16 Z" />
-      <path d="M8 0 l1 15 h3 l-1 -15 Z" />
-      <path d="M13 -28 q9 -6 14 2 l-3 6 Z" />
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      {/* off-side legs first, a shade darker, so the animal has depth */}
+      <g fill={far}>
+        <path d="M-10 -22 L-6.5 -22 L-5.5 -12 L-7 0 L-10.5 0 L-9 -12 Z" />
+        <path d="M8.5 -22 L12 -22 L13 -12.5 L10.5 0 L7 0 L10 -12.5 Z" />
+      </g>
+      <path d={CAMEL_OUTLINE} fill={fill} />
+      <path d="M23.2 -29.5 C27.7 -27 27.7 -18.5 24.7 -14 L22.7 -15 C25.2 -19 25.2 -23.5 21.2 -26.5 Z" fill={fill} />
+      <path d="M-40 -63 L-38.4 -66.8 L-36.4 -62.6 Z" fill={fill} />
     </g>
   );
 }
@@ -279,10 +311,13 @@ function TharDunes({ p, tint }) {
 
       <g fill={shade(p.near, 0.35)}>
         <Khejri x={170} y={676} fill={shade(p.near, 0.35)} />
-        <Khejri x={1075} y={680} s={0.85} fill={shade(p.near, 0.35)} />
         <Khejri x={1290} y={670} s={1.1} fill={shade(p.near, 0.35)} />
-        <Camel x={990} y={684} s={0.9} fill={shade(p.near, 0.45)} />
-        <Camel x={1042} y={688} s={0.78} fill={shade(p.near, 0.45)} />
+      </g>
+      {/* The caravan sits on the near dune, below the collection cards —
+          anywhere higher and the cards cover it. */}
+      <g>
+        <Camel x={1104} y={772} s={1.05} fill={shade(p.near, 0.3)} />
+        <Camel x={1178} y={778} s={0.88} fill={shade(p.near, 0.36)} />
       </g>
 
       <path

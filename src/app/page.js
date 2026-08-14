@@ -33,7 +33,10 @@ export default async function Home() {
 
   return (
     <Hero
-      initial={{ clock: p.clock, date: p.date, hour: p.hour24 }}
+      // `at` is the server's clock, so the browser's first render picks the
+      // same backdrop the HTML was built with and hydration stays quiet. The
+      // client corrects to the real current slide the moment it mounts.
+      initial={{ clock: p.clock, date: p.date, hour: p.hour24, at: Date.now() }}
       collections={collections}
     />
   );

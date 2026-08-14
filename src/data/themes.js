@@ -52,6 +52,20 @@ export const THEMES = [
 
 export const DEFAULT_THEME = "thar-dhora";
 
+/** How long each backdrop stays up before the next one fades in. */
+export const SLIDE_MS = 10 * 60 * 1000;
+
 export function themeBySlug(slug) {
   return THEMES.find((t) => t.slug === slug) || THEMES[0];
+}
+
+/**
+ * Which backdrop is showing at a given moment.
+ *
+ * Derived from the clock rather than held in state, so the server and the
+ * browser always agree on the first paint, every visitor sees the same place at
+ * the same time, and a reload does not restart the sequence.
+ */
+export function themeForTime(ms = Date.now()) {
+  return THEMES[Math.floor(ms / SLIDE_MS) % THEMES.length];
 }

@@ -4,12 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import SceneBackdrop from "./SceneBackdrop";
 import StationMark from "./StationMark";
-import ThemePicker from "./ThemePicker";
 import { useStation } from "./Station";
-import { DEFAULT_THEME, THEMES } from "@/data/themes";
+import { SLIDE_MS, themeForTime } from "@/data/themes";
 import { greetingForHour, indianNumber, istParts, sceneForHour } from "@/lib/ist";
-
-const THEME_KEY = "maro-rajasthan:theme";
 
 /**
  * A made-up listener count. There is no analytics here and nobody is counted:
@@ -30,25 +27,11 @@ export default function Hero({ initial, collections }) {
   const station = useStation();
   const [now, setNow] = useState(initial);
   const [count, setCount] = useState(null);
-  // Read after mount, never during render — the server has no localStorage and
-  // a first client render that disagreed with it would be a hydration mismatch.
-  const [theme, setTheme] = useState(DEFAULT_THEME);
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(THEME_KEY);
-      if (saved && THEMES.some((t) => t.slug === saved)) setTheme(saved);
-    } catch {
-      // private mode, or storage disabled — the default is fine
-    }
-  }, []);
-
-  const chooseTheme = (slug) => {
-    setTheme(slug);
-    try {
-      window.localStorage.setItem(THEME_KEY, slug);
-    } catch {}
-  };
+  // The backdrop is a slideshow on a ten-minute turn. `theme` is what is
+  // showing; `outgoing` is the one it is fading over, cleared once the
+  // crossfade has finished.
+  const [theme, setTheme] = useState(() => themeForTime(initial.at).slug);
+  const [outgoing, setOutgoing] = useState(null);
 
   useEffect(() => {
     const tick = () => {
@@ -56,11 +39,26 @@ export default function Hero({ initial, collections }) {
       const p = istParts(d);
       setNow({ clock: p.clock, date: p.date, hour: p.hour24 });
       setCount(listenerCount(d));
+
+      const next = themeForTime(d.getTime()).slug;
+      setTheme((cur) => {
+        if (cur === next) return cur;
+        setOutgoing(cur);
+        return next;
+      });
     };
     tick();
     const id = setInterval(tick, 15000);
     return () => clearInterval(id);
   }, []);
+
+  // Drop the outgoing layer once it has faded out, so only one scene is
+  // mounted between transitions.
+  useEffect(() => {
+    if (!outgoing) return;
+    const id = setTimeout(() => setOutgoing(null), 2200);
+    return () => clearTimeout(id);
+  }, [outgoing]);
 
   const greeting = greetingForHour(now.hour);
   const scene = sceneForHour(now.hour);
@@ -68,7 +66,15 @@ export default function Hero({ initial, collections }) {
 
   return (
     <section className="relative min-h-screen overflow-hidden">
-      <SceneBackdrop scene={scene} theme={theme} />
+      {/* The slideshow: the arriving scene fades in over the one it replaces. */}
+      {outgoing && (
+        <div className="absolute inset-0">
+          <SceneBackdrop scene={scene} theme={outgoing} />
+        </div>
+      )}
+      <div key={theme} className="absolute inset-0 scene-fade">
+        <SceneBackdrop scene={scene} theme={theme} />
+      </div>
 
       {/* The two corners. On a phone they cannot float over the wordmark, so
           they become an ordinary stacked header and the centre starts below. */}
@@ -113,8 +119,6 @@ export default function Hero({ initial, collections }) {
             All songs
           </Link>
         </nav>
-        <ThemePicker value={theme} onChange={chooseTheme} />
-
         <div className="rounded-xl border border-marigold/35 bg-ink/70 p-3 text-center backdrop-blur sm:max-w-[16rem]">
           <p className="text-[11px] leading-relaxed text-cream/75">
             Free, and staying free. No ads, no account, nothing hosted here —
