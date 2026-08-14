@@ -7,8 +7,13 @@ import StationMark from "./StationMark";
 import { useStation } from "./Station";
 import { greetingForHour, indianNumber, istParts, sceneForHour } from "@/lib/ist";
 
-/** A listener count that drifts rather than sitting still, seeded off the
- *  clock so it climbs through the evening the way a real one would. */
+/**
+ * A made-up listener count. There is no analytics here and nobody is counted:
+ * this is a sine wave over the day plus a hash of the clock, so the figure
+ * drifts and jitters the way a real one would. It is labelled as invented on
+ * the page, because a number presented next to a live-looking pulse would
+ * otherwise read as a measurement.
+ */
 function listenerCount(date) {
   const mins = Math.floor(date.getTime() / 60000);
   const base = 78000;
@@ -61,6 +66,9 @@ export default function Hero({ initial, collections }) {
             {count === null ? "—" : indianNumber(count)}
           </span>
           <span className="text-cream/60">tuned in</span>
+        </p>
+        <p className="mt-0.5 text-[10px] italic text-cream/40">
+          a number this station made up
         </p>
         <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-cream/15 bg-ink/40 px-3 py-1 text-[11px] text-cream backdrop-blur">
           Built with ❤️ Nimesh Prajapati
