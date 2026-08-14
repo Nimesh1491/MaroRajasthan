@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  /* Rajasthan palette — Jodhpur indigo night, Jaisalmer sandstone,
+     lac-bangle red, marigold. */
+  --color-ink: #150f18;
+  --color-ink2: #1e1524;
+  --color-cream: #f6e8d0;
+  --color-lac: #c3183a;
+  --color-marigold: #e8ab2e;
+  --color-indigo: #241f4b;
+  --color-mehendi: #7c8a46;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-devanagari: var(--font-rozha), serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-ink);
+  color: var(--color-cream);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Film grain over the illustrated scene, same trick the original uses. */
+@keyframes grain-shift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  25% {
+    transform: translate3d(-2%, 1%, 0);
+  }
+  50% {
+    transform: translate3d(1%, -2%, 0);
+  }
+  75% {
+    transform: translate3d(-1%, -1%, 0);
+  }
+}
+
+.grain {
+  animation: grain-shift 8s steps(4, end) infinite;
+}
+
+@keyframes lamp-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.lamp-glow {
+  animation: lamp-glow 4.5s ease-in-out infinite;
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Marigold seek-bar thumb */
+input[type="range"].seek {
+  appearance: none;
+  background: transparent;
+}
+
+input[type="range"].seek::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-cream) 22%, transparent);
+}
+
+input[type="range"].seek::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: -5px;
+  height: 13px;
+  width: 13px;
+  border-radius: 999px;
+  background: var(--color-marigold);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-marigold) 25%, transparent);
+}
+
+input[type="range"].seek::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-cream) 22%, transparent);
+}
+
+input[type="range"].seek::-moz-range-thumb {
+  border: none;
+  height: 13px;
+  width: 13px;
+  border-radius: 999px;
+  background: var(--color-marigold);
+}
+
+::selection {
+  background: var(--color-lac);
+  color: var(--color-cream);
+}
