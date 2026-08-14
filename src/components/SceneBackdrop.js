@@ -7,81 +7,116 @@
 //     the architecture and the tint.
 //
 // Neither has anything to do with what is playing.
+//
+// Depth comes from four things applied consistently across every scene:
+//   1. a single light source, at the sun/moon (upper right), so every solid has
+//      a lit right face and a shadowed left one;
+//   2. atmospheric haze — distant layers dissolve toward the sky colour at
+//      their base, near layers barely at all;
+//   3. surface gradients rather than flat fills, so nothing reads as a sticker;
+//   4. progressive darkening front to back, with the foreground nearly black.
 
 import { themeBySlug } from "@/data/themes";
 
+/* ------------------------------------------------------------ colour maths */
+
+const toRgb = (h) => [
+  parseInt(h.slice(1, 3), 16),
+  parseInt(h.slice(3, 5), 16),
+  parseInt(h.slice(5, 7), 16),
+];
+const toHex = (c) =>
+  "#" +
+  c
+    .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0"))
+    .join("");
+const mix = (a, b, t) => {
+  const [x, y] = [toRgb(a), toRgb(b)];
+  return toHex(x.map((v, i) => v + (y[i] - v) * t));
+};
+const lit = (c, t = 0.2) => mix(c, "#ffffff", t);
+const shade = (c, t = 0.28) => mix(c, "#000000", t);
+
 const PALETTES = {
   night: {
-    skyTop: "#08060f",
-    skyMid: "#171130",
-    skyLow: "#3a2450",
+    skyTop: "#07060e",
+    skyMid: "#141029",
+    skyLow: "#33223f",
     disc: "#f6e8d0",
     discGlow: "#8f7fc0",
     discY: 190,
     discR: 44,
     stars: 0.9,
+    clouds: 0.1,
     far: "#241a3c",
     mid: "#1d1430",
-    near: "#130d1a",
-    fg: "#0b0810",
-    water: "#1b1836",
+    near: "#171024",
+    fg: "#0a0710",
+    water: "#171634",
     lamp: "#e8ab2e",
-    lampAlpha: 0.5,
-    tintAlpha: 0.3,
+    lampAlpha: 0.62,
+    tintAlpha: 0.26,
+    litAmt: 0.1,
   },
   dawn: {
     skyTop: "#241a3b",
     skyMid: "#6b3a55",
-    skyLow: "#e0894f",
+    skyLow: "#e79a5c",
     disc: "#ffe6b0",
     discGlow: "#f2a45c",
     discY: 470,
     discR: 52,
-    stars: 0.2,
-    far: "#5a3648",
+    stars: 0.22,
+    clouds: 0.5,
+    far: "#68455a",
     mid: "#7a4a44",
-    near: "#3a2228",
-    fg: "#1a1016",
+    near: "#4a2a2e",
+    fg: "#1c1016",
     water: "#8a5a52",
     lamp: "#e8ab2e",
-    lampAlpha: 0.3,
-    tintAlpha: 0.5,
+    lampAlpha: 0.4,
+    tintAlpha: 0.46,
+    litAmt: 0.24,
   },
   day: {
-    skyTop: "#2c5b8c",
-    skyMid: "#6f9dc0",
-    skyLow: "#d9c79f",
-    disc: "#fff6dc",
-    discGlow: "#ffe9a8",
+    skyTop: "#2b5f92",
+    skyMid: "#7cabcc",
+    skyLow: "#dcccab",
+    disc: "#fff9e6",
+    discGlow: "#ffeeb4",
     discY: 140,
     discR: 34,
     stars: 0,
-    far: "#8d7a63",
-    mid: "#b09572",
-    near: "#6a5540",
-    fg: "#33281c",
-    water: "#7fa8c4",
+    clouds: 0.9,
+    far: "#8f7f69",
+    mid: "#a68d6c",
+    near: "#755c40",
+    fg: "#291f14",
+    water: "#86b0cb",
     lamp: "#e8ab2e",
-    lampAlpha: 0.18,
-    tintAlpha: 0.78,
+    lampAlpha: 0.16,
+    tintAlpha: 0.8,
+    litAmt: 0.3,
   },
   dusk: {
-    skyTop: "#1f0c2c",
-    skyMid: "#7a2a3e",
-    skyLow: "#e0862f",
+    skyTop: "#1d0b2b",
+    skyMid: "#7c2c40",
+    skyLow: "#e78c34",
     disc: "#ffd98a",
     discGlow: "#e86a2a",
     discY: 430,
     discR: 58,
     stars: 0.35,
-    far: "#4a2233",
-    mid: "#68313a",
-    near: "#2a1218",
-    fg: "#150a10",
-    water: "#6d3340",
+    clouds: 0.7,
+    far: "#5a2a3a",
+    mid: "#6d3540",
+    near: "#3a1a22",
+    fg: "#160b11",
+    water: "#743744",
     lamp: "#e8ab2e",
-    lampAlpha: 0.42,
-    tintAlpha: 0.45,
+    lampAlpha: 0.52,
+    tintAlpha: 0.44,
+    litAmt: 0.22,
   },
 };
 
@@ -89,22 +124,38 @@ const STARS = [
   [120, 90], [260, 150], [380, 70], [520, 130], [640, 60], [760, 110],
   [900, 80], [1040, 145], [1180, 65], [1320, 120], [180, 210], [430, 235],
   [700, 200], [980, 230], [1250, 205], [60, 160], [1400, 175], [340, 120],
-  [860, 175], [1120, 100],
+  [860, 175], [1120, 100], [220, 60], [560, 190], [1010, 55], [1380, 240],
 ];
+
+const CLOUDS = [
+  [200, 150, 260, 26],
+  [560, 105, 200, 20],
+  [980, 190, 300, 30],
+  [1300, 130, 220, 22],
+  [760, 250, 180, 16],
+];
+
+/** Light comes from the sun/moon at x≈1090, so right faces catch it. */
+const LIGHT_X = 1090;
 
 /* ------------------------------------------------------------------ atoms */
 
-function Chhatri({ x, y, s = 1, fill }) {
+function Chhatri({ x, y, s = 1, base, p }) {
+  const l = lit(base, p.litAmt);
+  const d = shade(base);
   return (
-    <g transform={`translate(${x} ${y}) scale(${s})`} fill={fill}>
-      <path d="M-40 0 h80 v-8 h-80 Z" />
-      <path d="M-34 -8 q34 -46 68 0 Z" />
-      <rect x="-2" y="-62" width="4" height="14" />
-      <circle cx="0" cy="-64" r="5" />
-      <rect x="-34" y="0" width="7" height="42" />
-      <rect x="-12" y="0" width="7" height="42" />
-      <rect x="6" y="0" width="7" height="42" />
-      <rect x="27" y="0" width="7" height="42" />
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <path d="M-40 0 h80 v-8 h-80 Z" fill={d} />
+      <path d="M-34 -8 q34 -46 68 0 Z" fill={base} />
+      <path d="M0 -33 q17 4 34 25 L0 -8 Z" fill={l} opacity="0.85" />
+      <rect x="-2" y="-62" width="4" height="14" fill={d} />
+      <circle cx="0" cy="-64" r="5" fill={l} />
+      {[-34, -12, 6, 27].map((px, i) => (
+        <g key={px}>
+          <rect x={px} y="0" width="7" height="42" fill={i > 1 ? base : d} />
+          <rect x={px + 5} y="0" width="2" height="42" fill={l} opacity="0.5" />
+        </g>
+      ))}
     </g>
   );
 }
@@ -113,8 +164,10 @@ function Camel({ x, y, s = 1, fill }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`} fill={fill}>
       <path d="M-24 0 v-14 q0 -10 8 -12 q4 -12 12 -12 q8 0 11 10 q7 -2 9 6 l3 22 h-6 l-3 -16 l-22 2 l-2 14 Z" />
-      <path d="M-20 0 l-2 14 h4 l3 -14 Z" />
-      <path d="M14 0 l2 14 h4 l-2 -14 Z" />
+      <path d="M-20 0 l-2 16 h4 l3 -16 Z" />
+      <path d="M-12 0 l-1 15 h3 l2 -15 Z" />
+      <path d="M14 0 l2 16 h4 l-2 -16 Z" />
+      <path d="M8 0 l1 15 h3 l-1 -15 Z" />
       <path d="M13 -28 q9 -6 14 2 l-3 6 Z" />
     </g>
   );
@@ -123,97 +176,143 @@ function Camel({ x, y, s = 1, fill }) {
 function Khejri({ x, y, s = 1, fill }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`} fill={fill}>
-      <rect x="-3" y="-34" width="6" height="34" />
-      <path d="M-30 -34 q30 -26 60 0 q-30 -12 -60 0 Z" />
-      <path d="M-22 -44 q22 -20 44 0 q-22 -9 -44 0 Z" />
+      <path d="M-2 0 l-1 -30 l-6 -12 l7 8 l1 -10 l5 -9 l-3 11 l6 -7 l-4 10 l1 17 Z" />
+      <path d="M-32 -36 q32 -30 64 0 q-32 -13 -64 0 Z" />
+      <path d="M-24 -47 q24 -22 48 0 q-24 -10 -48 0 Z" />
+      <path d="M-14 -56 q14 -14 28 0 q-14 -6 -28 0 Z" />
     </g>
   );
 }
 
-/** A grid of jharokha openings — the unit the pink city is built from. */
-function Jharokhas({ x, y, cols, rows, gap = 26, fill, opacity = 1 }) {
+function Birds({ x, y, s = 1, fill }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`} fill="none" stroke={fill} strokeWidth="1.6" strokeLinecap="round">
+      <path d="M0 0 q6 -5 11 0 q5 -5 11 0" />
+      <path d="M28 14 q5 -4 9 0 q4 -4 9 0" opacity="0.8" />
+      <path d="M-22 20 q4 -3 8 0 q4 -3 8 0" opacity="0.65" />
+    </g>
+  );
+}
+
+/** A lit window recess: a dark opening with warm light inside it. */
+function Windows({ x, y, cols, rows, gap = 26, w = 12, h = 17, p, warm = 1 }) {
   const cells = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
+      const on = (r * 31 + c * 17) % 5 !== 0; // a few unlit, so it reads as lived in
       cells.push(
         <g key={`${r}-${c}`} transform={`translate(${c * gap} ${r * gap})`}>
-          <path d="M0 14 L0 6 Q0 -4 7 -4 Q14 -4 14 6 L14 14 Z" />
+          <path
+            d={`M0 ${h} L0 ${h * 0.45} Q0 -2 ${w / 2} -2 Q${w} -2 ${w} ${h * 0.45} L${w} ${h} Z`}
+            fill="#000"
+            opacity="0.5"
+          />
+          {on && (
+            <path
+              d={`M1.5 ${h} L1.5 ${h * 0.45} Q1.5 -0.5 ${w / 2} -0.5 Q${w - 1.5} -0.5 ${w - 1.5} ${h * 0.45} L${w - 1.5} ${h} Z`}
+              fill={p.lamp}
+              opacity={p.lampAlpha * warm}
+            />
+          )}
         </g>
       );
     }
   }
-  return (
-    <g transform={`translate(${x} ${y})`} fill={fill} opacity={opacity}>
-      {cells}
-    </g>
-  );
+  return <g transform={`translate(${x} ${y})`}>{cells}</g>;
 }
 
-function Flamingo({ x, y, s = 1, fill }) {
-  return (
-    <g transform={`translate(${x} ${y}) scale(${s})`} fill={fill}>
-      <path d="M0 0 l3 -22 q1 -8 8 -10 q7 -2 10 4 q-6 -1 -8 3 q-2 4 2 6 l-6 4 q-4 -3 -6 1 l-1 14 Z" />
-      <rect x="-1" y="0" width="2" height="16" />
-      <rect x="4" y="0" width="2" height="16" />
-      <path d="M-4 -6 q8 -6 16 0 q-8 4 -16 0 Z" />
-    </g>
-  );
+/** Horizontal stone courses — cheap, and it stops big faces reading as slabs. */
+function Courses({ x, y, w, h, step = 13, opacity = 0.13 }) {
+  const lines = [];
+  for (let i = step; i < h; i += step) {
+    lines.push(<rect key={i} x={x} y={y + i} width={w} height="1" fill="#000" opacity={opacity} />);
+  }
+  return <>{lines}</>;
 }
 
 /* ----------------------------------------------------------------- scenes */
 
 function TharDunes({ p, tint }) {
+  const sand = mix(p.near, tint, p.tintAlpha * 0.6);
   return (
     <>
-      <g fill={p.far}>
-        <path d="M0 560 L60 548 L120 520 L150 470 L250 452 L300 470 L360 462 L420 486 L520 478 L560 500 L640 508 L700 530 L760 545 L820 556 L900 560 L1440 566 L1440 620 L0 620 Z" />
-        <path d="M170 470 h150 v-34 h-12 v-14 h-14 v14 h-22 v-14 h-14 v14 h-22 v-14 h-14 v14 h-22 v-14 h-14 v14 h-12 Z" />
-      </g>
-      <g fill={p.mid}>
-        <rect x="0" y="596" width="1440" height="120" />
-        <Chhatri x={90} y={560} fill={p.mid} />
-        <Chhatri x={1010} y={552} s={1.15} fill={p.mid} />
-        <Chhatri x={1210} y={568} s={0.85} fill={p.mid} />
-        <Chhatri x={1348} y={556} fill={p.mid} />
-        <rect x="330" y="566" width="150" height="80" />
-        <rect x="640" y="576" width="120" height="70" />
-        <rect x="820" y="584" width="110" height="62" />
-      </g>
+      {/* far ridge, dissolving into haze */}
       <path
-        d="M0 660 C220 618 380 690 600 662 C820 634 980 700 1200 664 C1320 644 1400 660 1440 654 L1440 900 L0 900 Z"
-        fill={tint}
-        opacity={p.tintAlpha * 0.55}
+        d="M0 566 L70 552 L128 520 L156 470 L252 452 L302 470 L362 462 L424 486 L520 478 L562 500 L642 508 L702 530 L764 546 L822 556 L902 560 L1440 570 L1440 640 L0 640 Z"
+        fill="url(#farPaint)"
+      />
+      <path d="M170 470 h150 v-34 h-12 v-14 h-14 v14 h-22 v-14 h-14 v14 h-22 v-14 h-14 v14 h-22 v-14 h-14 v14 h-12 Z" fill={shade(p.far, 0.2)} />
+
+      <g>
+        <rect x="0" y="596" width="1440" height="120" fill="url(#midPaint)" />
+        <Chhatri x={90} y={560} base={p.mid} p={p} />
+        <Chhatri x={1010} y={552} s={1.15} base={p.mid} p={p} />
+        <Chhatri x={1210} y={568} s={0.85} base={p.mid} p={p} />
+        <Chhatri x={1348} y={556} base={p.mid} p={p} />
+        {[
+          [330, 566, 150, 80],
+          [640, 576, 120, 70],
+          [820, 584, 110, 62],
+        ].map(([x, y, w, h]) => (
+          <g key={x}>
+            <rect x={x} y={y} width={w} height={h} fill={p.mid} />
+            <rect x={x + w * 0.62} y={y} width={w * 0.38} height={h} fill={lit(p.mid, p.litAmt * 0.7)} />
+            <rect x={x - 4} y={y - 6} width={w + 8} height="7" rx="2" fill={shade(p.mid, 0.35)} />
+            <Windows x={x + 16} y={y + 24} cols={3} rows={1} gap={30} p={p} warm={0.7} />
+          </g>
+        ))}
+      </g>
+
+      {/* Dunes: each one a sunlit face and a shadow face meeting at the crest,
+          which is what actually makes sand read as sand. */}
+      <g>
+        <path
+          d="M0 662 C180 616 330 690 520 664 C700 640 860 700 1060 666 C1210 640 1350 664 1440 652 L1440 900 L0 900 Z"
+          fill={mix(sand, "#000000", 0.18)}
+        />
+        <path
+          d="M520 664 C700 640 860 700 1060 666 C1210 640 1350 664 1440 652 L1440 760 C1250 748 1050 742 860 754 C700 764 600 720 520 664 Z"
+          fill={lit(sand, p.litAmt * 0.7)}
+          opacity="0.45"
+        />
+      </g>
+
+      <g fill={shade(p.near, 0.35)}>
+        <Khejri x={170} y={676} fill={shade(p.near, 0.35)} />
+        <Khejri x={1075} y={680} s={0.85} fill={shade(p.near, 0.35)} />
+        <Khejri x={1290} y={670} s={1.1} fill={shade(p.near, 0.35)} />
+        <Camel x={990} y={684} s={0.9} fill={shade(p.near, 0.45)} />
+        <Camel x={1042} y={688} s={0.78} fill={shade(p.near, 0.45)} />
+      </g>
+
+      <path
+        d="M0 748 C240 706 450 782 720 752 C950 726 1140 792 1440 748 L1440 900 L0 900 Z"
+        fill={mix(sand, "#000000", 0.42)}
       />
       <path
-        d="M0 660 C220 618 380 690 600 662 C820 634 980 700 1200 664 C1320 644 1400 660 1440 654 L1440 900 L0 900 Z"
-        fill={p.near}
-        opacity="0.55"
+        d="M0 748 C240 706 450 782 720 752 L720 800 C450 826 240 760 0 796 Z"
+        fill={lit(sand, 0.1)}
+        opacity="0.3"
       />
-      <g fill={p.near}>
-        <Khejri x={170} y={668} fill={p.near} />
-        <Khejri x={1075} y={672} s={0.85} fill={p.near} />
-        <Khejri x={1290} y={664} s={1.1} fill={p.near} />
-        <Camel x={990} y={676} s={0.9} fill={p.near} />
-        <Camel x={1042} y={680} s={0.78} fill={p.near} />
-      </g>
-      <path
-        d="M0 744 C260 706 460 776 720 748 C960 722 1140 786 1440 744 L1440 900 L0 900 Z"
-        fill={p.near}
-      />
+
       <Baithak p={p} />
+
       <g fill={p.fg}>
-        <g transform="translate(210 810)">
+        <g transform="translate(210 812)">
           <rect x="-120" y="-10" width="240" height="12" rx="4" />
           <rect x="-116" y="2" width="10" height="56" />
           <rect x="106" y="2" width="10" height="56" />
           <rect x="-60" y="2" width="8" height="46" />
           <rect x="52" y="2" width="8" height="46" />
+          {Array.from({ length: 11 }, (_, i) => (
+            <rect key={i} x={-112 + i * 21} y="-9" width="2" height="10" opacity="0.5" />
+          ))}
         </g>
-        <g transform="translate(1250 826)">
+        <g transform="translate(1250 828)">
           <circle cx="0" cy="0" r="54" fill="none" stroke={p.fg} strokeWidth="10" />
           <circle cx="0" cy="0" r="9" />
-          {[0, 45, 90, 135].map((a) => (
-            <rect key={a} x="-50" y="-3" width="100" height="6" transform={`rotate(${a})`} />
+          {[0, 30, 60, 90, 120, 150].map((a) => (
+            <rect key={a} x="-50" y="-2.5" width="100" height="5" transform={`rotate(${a})`} />
           ))}
         </g>
       </g>
@@ -221,7 +320,6 @@ function TharDunes({ p, tint }) {
   );
 }
 
-/** The lit doorway the Thar scene is built around. */
 function Baithak({ p }) {
   return (
     <g transform="translate(86.4 150) scale(0.88)">
@@ -229,14 +327,13 @@ function Baithak({ p }) {
       <path
         d="M560 780 L560 560 Q560 500 620 490 Q650 462 690 470 Q720 440 750 470 Q790 462 820 490 Q880 500 880 560 L880 780 Z"
         fill={p.lamp}
-        opacity={p.lampAlpha * 0.55}
+        opacity={p.lampAlpha * 0.5}
       />
       <path
         d="M578 780 L578 566 Q578 514 630 506 Q656 482 692 490 Q720 464 748 490 Q784 482 810 506 Q862 514 862 566 L862 780 Z"
-        fill="#f2c46a"
-        opacity={p.lampAlpha * 0.34}
+        fill="url(#doorGlow)"
       />
-      <g opacity="0.92" fill={p.fg}>
+      <g opacity="0.95" fill={p.fg}>
         {[
           [648, 772, 1.05],
           [722, 778, 1.15],
@@ -254,14 +351,8 @@ function Baithak({ p }) {
       {[600, 720, 840].map((x, i) => (
         <g key={x}>
           <rect x={x - 1} y="506" width="2" height="26" fill={p.fg} />
-          <circle
-            cx={x}
-            cy="538"
-            r="7"
-            fill={p.lamp}
-            className="lamp-glow"
-            style={{ animationDelay: `${i * 1.3}s` }}
-          />
+          <circle cx={x} cy="538" r="16" fill={p.lamp} opacity="0.18" filter="url(#soft)" />
+          <circle cx={x} cy="538" r="6" fill={p.lamp} className="lamp-glow" />
         </g>
       ))}
     </g>
@@ -269,292 +360,329 @@ function Baithak({ p }) {
 }
 
 function BlueCity({ p, tint }) {
-  // A dense field of flat-roofed cubes, which is what Jodhpur looks like from
-  // the fort: not streets, just rooftops.
-  const houses = [];
+  const rows = [];
   let seed = 7;
   const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
-  for (let row = 0; row < 5; row++) {
-    const baseY = 620 + row * 58;
-    for (let x = -40; x < 1480; x += 62 + Math.floor(rnd() * 26)) {
-      const w = 46 + Math.floor(rnd() * 34);
-      const h = 40 + Math.floor(rnd() * 34);
-      houses.push({ x, y: baseY - h, w, h, row });
+  for (let row = 0; row < 6; row++) {
+    const baseY = 590 + row * 56;
+    const depth = 1 - row / 6;
+    const houses = [];
+    for (let x = -50; x < 1490; x += 58 + Math.floor(rnd() * 30)) {
+      const w = 44 + Math.floor(rnd() * 36);
+      const h = 34 + Math.floor(rnd() * 40);
+      houses.push({ x, w, h, y: baseY - h, tall: rnd() > 0.82 });
     }
+    rows.push({ houses, depth, baseY });
   }
+
   return (
     <>
-      {/* The fort sits on the left flank rather than dead centre: the middle of
-          the frame is where the wordmark and the collection cards land, and a
-          silhouette put there is simply never seen. */}
+      {/* the rock, with a lit western face */}
       <g transform="translate(-190 -52)">
-        {/* the rock it stands on */}
-        <path
-          d="M240 600 L300 470 L360 420 L470 386 L600 372 L720 384 L800 420 L860 470 L920 600 Z"
-          fill={p.far}
-        />
-        {/* Mehrangarh: a long wall with bastions */}
-        <g fill={p.mid}>
-          <rect x="360" y="330" width="440" height="70" />
-          <rect x="392" y="286" width="96" height="48" />
-          <rect x="556" y="270" width="120" height="64" />
-          <rect x="712" y="296" width="80" height="40" />
+        <path d="M240 600 L300 470 L360 420 L470 386 L600 372 L720 384 L800 420 L860 470 L920 600 Z" fill="url(#farPaint)" />
+        <path d="M600 372 L720 384 L800 420 L860 470 L920 600 L700 600 Z" fill={lit(p.far, p.litAmt * 0.55)} opacity="0.7" />
+
+        {/* Mehrangarh */}
+        <g>
+          <rect x="360" y="330" width="440" height="72" fill={p.mid} />
+          <rect x="600" y="330" width="200" height="72" fill={lit(p.mid, p.litAmt)} />
+          <Courses x={360} y={330} w={440} h={72} step={12} />
+          <rect x="392" y="286" width="96" height="48" fill={shade(p.mid, 0.12)} />
+          <rect x="556" y="270" width="120" height="64" fill={p.mid} />
+          <rect x="628" y="270" width="48" height="64" fill={lit(p.mid, p.litAmt)} />
+          <rect x="712" y="296" width="80" height="40" fill={lit(p.mid, p.litAmt * 0.6)} />
           {[380, 470, 560, 650, 740].map((x) => (
-            <circle key={x} cx={x} cy="336" r="26" />
+            <g key={x}>
+              <circle cx={x} cy="336" r="27" fill={p.mid} />
+              <path d={`M${x} 309 a27 27 0 0 1 0 54 Z`} fill={lit(p.mid, p.litAmt)} />
+            </g>
           ))}
           {Array.from({ length: 22 }, (_, i) => (
-            <rect key={i} x={362 + i * 20} y="318" width="10" height="14" />
+            <rect key={i} x={362 + i * 20} y="316" width="10" height="15" fill={shade(p.mid, 0.2)} />
           ))}
         </g>
-        <Jharokhas x={410} y={300} cols={4} rows={1} gap={26} fill={p.lamp} opacity={p.lampAlpha} />
-        <Jharokhas x={578} y={286} cols={4} rows={1} gap={26} fill={p.lamp} opacity={p.lampAlpha} />
+        <Windows x={410} y={302} cols={4} rows={1} gap={26} p={p} />
+        <Windows x={578} y={288} cols={4} rows={1} gap={26} p={p} />
       </g>
 
-      {/* the blue houses */}
-      {houses.map((h, i) => (
-        <g key={i}>
-          <rect x={h.x} y={h.y} width={h.w} height={h.h + 60} fill={p.near} />
-          <rect
-            x={h.x}
-            y={h.y}
-            width={h.w}
-            height={h.h + 60}
-            fill={tint}
-            opacity={p.tintAlpha * (0.9 - h.row * 0.1)}
-          />
-          <rect x={h.x - 3} y={h.y - 5} width={h.w + 6} height={6} fill={p.fg} opacity="0.55" />
-          {h.w > 58 && (
-            <rect
-              x={h.x + 12}
-              y={h.y + 16}
-              width={12}
-              height={16}
-              fill={p.lamp}
-              opacity={p.lampAlpha * 0.9}
-            />
-          )}
+      {/* the blue houses, hazier and paler with distance */}
+      {rows.map((row, ri) => (
+        <g key={ri}>
+          {row.houses.map((h, i) => {
+            const base = mix(p.near, tint, p.tintAlpha * (0.55 + row.depth * 0.45));
+            const hazed = mix(base, p.skyLow, (1 - row.depth) * 0.42);
+            return (
+              <g key={i}>
+                <rect x={h.x} y={h.y} width={h.w} height={h.h + 70} fill={hazed} />
+                <rect x={h.x + h.w * 0.66} y={h.y} width={h.w * 0.34} height={h.h + 70} fill={lit(hazed, p.litAmt * 0.8)} />
+                <rect x={h.x - 3} y={h.y - 5} width={h.w + 6} height={6} fill={shade(hazed, 0.4)} />
+                {h.tall && <rect x={h.x + h.w * 0.3} y={h.y - 22} width={14} height={18} fill={shade(hazed, 0.25)} />}
+                {h.w > 54 && row.depth > 0.3 && (
+                  <Windows x={h.x + 10} y={h.y + 18} cols={h.w > 68 ? 2 : 1} rows={1} gap={24} w={10} h={14} p={p} warm={row.depth} />
+                )}
+              </g>
+            );
+          })}
         </g>
       ))}
-      <rect x="0" y="860" width="1440" height="40" fill={p.fg} />
+      <rect x="0" y="856" width="1440" height="44" fill={p.fg} />
     </>
   );
 }
 
 function GoldenFort({ p, tint }) {
   const bastions = [300, 400, 500, 600, 700, 800, 900, 1000, 1100];
+  const stone = mix(p.mid, tint, p.tintAlpha * 0.75);
   return (
     <>
-      {/* Raised so the bastion line clears the collection cards — the round
-          towers are the whole point of Jaisalmer and need to be visible. */}
       <g transform="translate(0 -96)">
-      <path d="M180 620 L280 470 L1160 470 L1260 620 Z" fill={p.far} />
-      {/* the fort wall, all round bastions — Jaisalmer's signature */}
-      <g>
-        {/* curtain wall */}
-        <rect x="270" y="404" width="900" height="150" fill={p.mid} />
-        <rect x="270" y="404" width="900" height="150" fill={tint} opacity={p.tintAlpha * 0.62} />
-        {Array.from({ length: 45 }, (_, i) => (
-          <rect key={i} x={272 + i * 20} y="392" width="9" height="13" fill={p.mid} />
-        ))}
-        {/* Bastions stand proud of the wall — taller, wider and a shade darker,
-            otherwise they merge into it and Jaisalmer stops being Jaisalmer. */}
-        {bastions.map((x) => (
-          <g key={x}>
-            <path
-              d={`M${x - 40} 574 L${x - 38} 372 Q${x} 336 ${x + 38} 372 L${x + 40} 574 Z`}
-              fill={p.mid}
-            />
-            <path
-              d={`M${x - 40} 574 L${x - 38} 372 Q${x} 336 ${x + 38} 372 L${x + 40} 574 Z`}
-              fill={tint}
-              opacity={p.tintAlpha * 0.95}
-            />
-            <path
-              d={`M${x - 40} 574 L${x - 38} 372 Q${x} 336 ${x} 350 L${x} 574 Z`}
-              fill="#000"
-              opacity="0.12"
-            />
-            <rect x={x - 42} y="360" width="84" height="12" rx="3" fill={p.fg} opacity="0.35" />
-            {[-28, -10, 8, 26].map((d) => (
-              <rect key={d} x={x + d} y="348" width="10" height="14" fill={p.mid} />
-            ))}
-          </g>
-        ))}
+        <path d="M180 620 L280 470 L1160 470 L1260 620 Z" fill="url(#farPaint)" />
+        <g>
+          <rect x="270" y="404" width="900" height="152" fill={stone} />
+          <Courses x={270} y={404} w={900} h={152} step={14} opacity={0.16} />
+          {Array.from({ length: 45 }, (_, i) => (
+            <rect key={i} x={272 + i * 20} y="392" width="9" height="13" fill={shade(stone, 0.3)} />
+          ))}
+          {bastions.map((x) => {
+            const towerLit = x > LIGHT_X - 500;
+            return (
+              <g key={x}>
+                <path d={`M${x - 40} 574 L${x - 38} 372 Q${x} 336 ${x + 38} 372 L${x + 40} 574 Z`} fill={stone} />
+                {/* the curve: lit on the right, falling to shadow on the left */}
+                <path
+                  d={`M${x} 342 Q${x + 38} 372 ${x + 40} 574 L${x} 574 Z`}
+                  fill={lit(stone, p.litAmt * (towerLit ? 1 : 0.6))}
+                />
+                <path d={`M${x - 40} 574 L${x - 38} 372 Q${x - 22} 348 ${x - 14} 344 L${x - 14} 574 Z`} fill={shade(stone, 0.3)} />
+                <Courses x={x - 40} y={372} w={80} h={200} step={16} opacity={0.1} />
+                <rect x={x - 43} y="358" width="86" height="14" rx="3" fill={shade(stone, 0.42)} />
+                {[-29, -11, 7, 25].map((d) => (
+                  <rect key={d} x={x + d} y="344" width="11" height="15" fill={shade(stone, 0.16)} />
+                ))}
+              </g>
+            );
+          })}
+        </g>
+        {/* havelis */}
+        <g>
+          <rect x="180" y="560" width="1080" height="190" fill={mix(p.near, tint, p.tintAlpha * 0.45)} />
+          {[220, 470, 720, 970].map((x) => (
+            <g key={x}>
+              <rect x={x} y={578} width={210} height={155} fill={mix(stone, "#000000", 0.18)} />
+              <rect x={x + 132} y={578} width={78} height={155} fill={lit(mix(stone, "#000000", 0.18), p.litAmt * 0.7)} />
+              <rect x={x - 6} y={570} width={222} height={10} rx="3" fill={shade(stone, 0.45)} />
+              <Windows x={x + 16} y={606} cols={7} rows={3} gap={26} p={p} warm={0.85} />
+            </g>
+          ))}
+        </g>
       </g>
-      {/* haveli fronts below, with jharokha rows lit from inside */}
-      <g>
-        <rect x="180" y="560" width="1080" height="180" fill={p.near} />
-        <rect x="180" y="560" width="1080" height="180" fill={tint} opacity={p.tintAlpha * 0.5} />
-        {[220, 470, 720, 970].map((x) => (
-          <g key={x}>
-            <rect x={x} y={578} width={210} height={150} fill={p.mid} opacity="0.5" />
-            <Jharokhas x={x + 16} y={606} cols={7} rows={3} gap={26} fill={p.lamp} opacity={p.lampAlpha * 0.85} />
-          </g>
-        ))}
-      </g>
-      </g>
-      <Camel x={1300} y={790} s={1.15} fill={p.fg} />
-      <Camel x={1362} y={796} s={0.95} fill={p.fg} />
-      <Khejri x={120} y={782} s={1.2} fill={p.fg} />
-      <path d="M0 800 C300 780 700 820 1080 796 C1260 784 1380 802 1440 796 L1440 900 L0 900 Z" fill={p.fg} />
+      <Camel x={1300} y={792} s={1.15} fill={p.fg} />
+      <Camel x={1362} y={798} s={0.95} fill={p.fg} />
+      <Khejri x={120} y={786} s={1.2} fill={p.fg} />
+      <Birds x={330} y={250} s={1.2} fill={mix(p.far, p.skyMid, 0.3)} />
+      <path d="M0 802 C300 782 700 822 1080 798 C1260 786 1380 804 1440 798 L1440 900 L0 900 Z" fill={p.fg} />
     </>
   );
 }
 
 function LakePalace({ p, tint }) {
+  const stone = mix(p.mid, tint, p.tintAlpha * 0.35);
   return (
     <>
-      {/* the Aravalli behind */}
-      <path d="M0 520 L180 420 L340 486 L520 400 L700 470 L900 410 L1120 480 L1300 430 L1440 500 L1440 620 L0 620 Z" fill={p.far} />
-      {/* far ghats */}
-      <g fill={p.mid}>
-        <rect x="0" y="560" width="1440" height="60" />
+      {/* Aravalli, two ranges so there is real distance */}
+      <path d="M0 500 L180 402 L340 470 L520 384 L700 454 L900 396 L1120 466 L1300 414 L1440 486 L1440 620 L0 620 Z" fill="url(#farPaint)" />
+      <path d="M0 546 L220 470 L420 528 L640 456 L880 520 L1120 462 L1340 524 L1440 494 L1440 640 L0 640 Z" fill={mix(p.far, p.mid, 0.5)} opacity="0.85" />
+
+      {/* ghats */}
+      <g>
+        <rect x="0" y="558" width="1440" height="62" fill={p.mid} />
         {Array.from({ length: 26 }, (_, i) => (
-          <path key={i} d={`M${i * 56} 560 L${i * 56} 540 Q${i * 56 + 28} 516 ${i * 56 + 56} 540 L${i * 56 + 56} 560 Z`} />
+          <g key={i}>
+            <path d={`M${i * 56} 558 L${i * 56} 538 Q${i * 56 + 28} 512 ${i * 56 + 56} 538 L${i * 56 + 56} 558 Z`} fill={p.mid} />
+            <path d={`M${i * 56 + 28} 519 Q${i * 56 + 56} 538 ${i * 56 + 56} 558 L${i * 56 + 28} 558 Z`} fill={lit(p.mid, p.litAmt * 0.5)} />
+            <path d={`M${i * 56 + 8} 558 L${i * 56 + 8} 542 Q${i * 56 + 28} 524 ${i * 56 + 48} 542 L${i * 56 + 48} 558 Z`} fill="#000" opacity="0.35" />
+          </g>
         ))}
+        <rect x="0" y="612" width="1440" height="10" fill={shade(p.mid, 0.45)} />
       </g>
-      {/* The island palace, kept to the right flank. Centred it was hidden
-          behind the collection cards entirely. */}
+
+      {/* the island palace, on the right flank so the cards do not hide it */}
       <g transform="translate(500 -18)">
-        <rect x="580" y="470" width="280" height="130" fill={p.mid} />
-        <rect x="580" y="470" width="280" height="130" fill={tint} opacity={p.tintAlpha * 0.5} />
-        <rect x="626" y="424" width="188" height="52" fill={p.mid} />
-        <Chhatri x={640} y={424} s={0.55} fill={p.mid} />
-        <Chhatri x={720} y={410} s={0.7} fill={p.mid} />
-        <Chhatri x={800} y={424} s={0.55} fill={p.mid} />
-        <Jharokhas x={600} y={500} cols={9} rows={3} gap={28} fill={p.lamp} opacity={p.lampAlpha} />
+        <rect x="580" y="470" width="280" height="132" fill={stone} />
+        <rect x="740" y="470" width="120" height="132" fill={lit(stone, p.litAmt)} />
+        <Courses x={580} y={470} w={280} h={132} step={15} />
+        <rect x="626" y="424" width="188" height="52" fill={mix(stone, "#000000", 0.12)} />
+        <rect x="742" y="424" width="72" height="52" fill={lit(stone, p.litAmt * 0.8)} />
+        <rect x="572" y="462" width="296" height="11" rx="3" fill={shade(stone, 0.42)} />
+        <Chhatri x={640} y={424} s={0.55} base={stone} p={p} />
+        <Chhatri x={720} y={410} s={0.72} base={stone} p={p} />
+        <Chhatri x={800} y={424} s={0.55} base={stone} p={p} />
+        <Windows x={600} y={500} cols={9} rows={3} gap={28} p={p} />
       </g>
+
       {/* water */}
-      <rect x="0" y="600" width="1440" height="300" fill={p.water} />
-      <rect x="0" y="600" width="1440" height="300" fill={tint} opacity={p.tintAlpha * 0.35} />
-      {/* reflection of the palace, softened */}
-      <g opacity="0.28" transform="translate(500 1236) scale(1 -1)">
-        <rect x="580" y="470" width="280" height="130" fill={p.mid} />
-        <Jharokhas x={600} y={500} cols={9} rows={3} gap={28} fill={p.lamp} opacity={p.lampAlpha} />
+      <rect x="0" y="600" width="1440" height="300" fill="url(#waterPaint)" />
+      <g filter="url(#waterBlur)" opacity="0.34">
+        <g transform="translate(500 1236) scale(1 -1)">
+          <rect x="580" y="470" width="280" height="132" fill={stone} />
+          <Windows x={600} y={500} cols={9} rows={3} gap={28} p={p} />
+        </g>
       </g>
-      {/* ripples */}
-      {[640, 690, 740, 790, 840].map((y, i) => (
-        <rect key={y} x={200 + i * 60} y={y} width={340 - i * 30} height="3" rx="1.5" fill="#fff" opacity="0.07" />
+      {/* the sun/moon track on the water */}
+      <rect x="1040" y="600" width="100" height="300" fill={p.disc} opacity="0.09" filter="url(#soft)" />
+      {[628, 664, 706, 754, 812, 872].map((y, i) => (
+        <rect key={y} x={140 + i * 40} y={y} width={420 - i * 34} height={2 + i * 0.4} rx="1" fill="#fff" opacity={0.06 + i * 0.008} />
       ))}
-      {/* boats */}
+
       {[
-        [300, 760, 1],
-        [1080, 800, 1.25],
+        [300, 762, 1],
+        [1080, 806, 1.25],
       ].map(([x, y, s], i) => (
-        <g key={i} transform={`translate(${x} ${y}) scale(${s})`} fill={p.fg}>
-          <path d="M-46 0 q46 22 92 0 q-46 10 -92 0 Z" />
-          <rect x="-2" y="-34" width="4" height="34" />
-          <path d="M2 -32 l30 26 h-30 Z" />
+        <g key={i}>
+          <g transform={`translate(${x} ${y}) scale(${s})`} fill={p.fg}>
+            <path d="M-46 0 q46 24 92 0 q-46 11 -92 0 Z" />
+            <rect x="-2" y="-36" width="4" height="36" />
+            <path d="M2 -34 l30 28 h-30 Z" />
+          </g>
+          <g transform={`translate(${x} ${y + 6}) scale(${s} ${-s * 0.5})`} fill={p.fg} opacity="0.2" filter="url(#waterBlur)">
+            <path d="M-46 0 q46 24 92 0 q-46 11 -92 0 Z" />
+            <path d="M2 -34 l30 28 h-30 Z" />
+          </g>
         </g>
       ))}
-      <path d="M0 862 C320 850 760 878 1140 860 L1440 866 L1440 900 L0 900 Z" fill={p.fg} />
+      <path d="M0 866 C320 854 760 882 1140 864 L1440 870 L1440 900 L0 900 Z" fill={p.fg} />
     </>
   );
 }
 
 function PinkCity({ p, tint }) {
+  const storeys = [
+    { y: 560, w: 900, x: 270, h: 300, rows: 6 },
+    { y: 480, w: 780, x: 330, h: 90, rows: 2 },
+    { y: 410, w: 640, x: 400, h: 90, rows: 2 },
+    { y: 350, w: 480, x: 480, h: 90, rows: 2 },
+    { y: 300, w: 320, x: 560, h: 90, rows: 2 },
+  ];
   return (
     <>
-      <g fill={p.far}>
-        <rect x="0" y="540" width="1440" height="90" />
-        <Chhatri x={120} y={540} s={0.8} fill={p.far} />
-        <Chhatri x={1320} y={540} s={0.8} fill={p.far} />
+      <g>
+        <rect x="0" y="540" width="1440" height="92" fill="url(#farPaint)" />
+        <Chhatri x={120} y={540} s={0.8} base={p.far} p={p} />
+        <Chhatri x={1320} y={540} s={0.8} base={p.far} p={p} />
       </g>
-      {/* The facade, raised so its upper storeys clear the collection cards. */}
+
       <g transform="translate(0 -84)">
-        {[
-          { y: 560, w: 900, x: 270 },
-          { y: 480, w: 780, x: 330 },
-          { y: 410, w: 640, x: 400 },
-          { y: 350, w: 480, x: 480 },
-          { y: 300, w: 320, x: 560 },
-        ].map((s, i) => (
-          <g key={i}>
-            <rect x={s.x} y={s.y} width={s.w} height={i === 0 ? 300 : 90} fill={p.mid} />
-            <rect
-              x={s.x}
-              y={s.y}
-              width={s.w}
-              height={i === 0 ? 300 : 90}
-              fill={tint}
-              opacity={p.tintAlpha * (0.85 - i * 0.06)}
-            />
-            <rect x={s.x - 8} y={s.y - 8} width={s.w + 16} height={10} rx="3" fill={p.fg} opacity="0.35" />
-            <Jharokhas
-              x={s.x + 18}
-              y={s.y + 30}
-              cols={Math.floor((s.w - 30) / 30)}
-              rows={i === 0 ? 6 : 2}
-              gap={30}
-              fill={p.lamp}
-              opacity={p.lampAlpha * 0.95}
-            />
-          </g>
-        ))}
-        <Chhatri x={640} y={300} s={0.6} fill={p.mid} />
-        <Chhatri x={800} y={300} s={0.6} fill={p.mid} />
+        {storeys.map((s, i) => {
+          const base = mix(p.mid, tint, p.tintAlpha * (0.9 - i * 0.05));
+          return (
+            <g key={i}>
+              <rect x={s.x} y={s.y} width={s.w} height={s.h} fill={base} />
+              {/* the whole facade curves away to the left of the light */}
+              <rect x={s.x + s.w * 0.58} y={s.y} width={s.w * 0.42} height={s.h} fill={lit(base, p.litAmt * 0.75)} />
+              <rect x={s.x} y={s.y} width={s.w * 0.16} height={s.h} fill={shade(base, 0.22)} />
+              <Courses x={s.x} y={s.y} w={s.w} h={s.h} step={30} opacity={0.09} />
+              {/* cornice with its cast shadow */}
+              <rect x={s.x - 10} y={s.y - 10} width={s.w + 20} height={11} rx="3" fill={lit(base, p.litAmt * 0.4)} />
+              <rect x={s.x - 10} y={s.y + 1} width={s.w + 20} height={5} fill="#000" opacity="0.28" />
+              <Windows
+                x={s.x + 20}
+                y={s.y + 32}
+                cols={Math.floor((s.w - 34) / 30)}
+                rows={s.rows}
+                gap={30}
+                w={15}
+                h={20}
+                p={p}
+              />
+            </g>
+          );
+        })}
+        <Chhatri x={640} y={300} s={0.6} base={mix(p.mid, tint, p.tintAlpha * 0.6)} p={p} />
+        <Chhatri x={800} y={300} s={0.6} base={mix(p.mid, tint, p.tintAlpha * 0.6)} p={p} />
       </g>
-      {/* street lamps and the road */}
-      <rect x="0" y="820" width="1440" height="80" fill={p.fg} />
+
+      <rect x="0" y="812" width="1440" height="88" fill={p.fg} />
+      <rect x="0" y="812" width="1440" height="16" fill={lit(p.fg, 0.12)} opacity="0.6" />
       {[160, 400, 1040, 1290].map((x) => (
         <g key={x}>
-          <rect x={x - 2} y="700" width="4" height="122" fill={p.fg} />
-          <circle cx={x} cy="694" r="9" fill={p.lamp} className="lamp-glow" opacity={p.lampAlpha + 0.2} />
+          <rect x={x - 2} y="694" width="4" height="122" fill={p.fg} />
+          <circle cx={x} cy="690" r="20" fill={p.lamp} opacity="0.16" filter="url(#soft)" />
+          <circle cx={x} cy="690" r="7" fill={p.lamp} className="lamp-glow" />
+          <ellipse cx={x} cy="838" rx="26" ry="5" fill={p.lamp} opacity="0.1" />
         </g>
       ))}
+      <Birds x={1150} y={230} s={1.1} fill={mix(p.far, p.skyMid, 0.35)} />
     </>
   );
 }
 
 function SaltLake({ p, tint }) {
+  const crust = mix(p.water, tint, p.tintAlpha * 0.5);
   return (
     <>
-      {/* almost nothing on the horizon — that is the point of Sambhar */}
-      <rect x="0" y="596" width="1440" height="18" fill={p.far} opacity="0.7" />
-      {/* the pans */}
-      <rect x="0" y="610" width="1440" height="290" fill={p.water} />
-      <rect x="0" y="610" width="1440" height="290" fill={tint} opacity={p.tintAlpha * 0.45} />
-      {/* dividing bunds, drawn in perspective */}
-      {[640, 676, 720, 776, 846, 930].map((y, i) => (
-        <rect key={y} x="0" y={y} width="1440" height={2 + i} fill={p.fg} opacity="0.25" />
+      {/* the far shore is barely there — that is what Sambhar looks like */}
+      <rect x="0" y="592" width="1440" height="14" fill={mix(p.far, p.skyLow, 0.55)} opacity="0.8" />
+      <rect x="0" y="586" width="1440" height="26" fill={p.skyLow} opacity="0.35" filter="url(#soft)" />
+
+      <rect x="0" y="606" width="1440" height="294" fill="url(#saltPaint)" />
+
+      {/* bunds, converging slightly so the pans read as receding */}
+      {[634, 668, 710, 764, 832, 900].map((y, i) => (
+        <rect key={y} x="0" y={y} width="1440" height={1.5 + i * 0.9} fill={shade(crust, 0.5)} opacity="0.4" />
       ))}
-      {[180, 470, 760, 1050, 1340].map((x) => (
-        <rect key={x} x={x} y="610" width="3" height="290" fill={p.fg} opacity="0.18" />
-      ))}
-      {/* salt heaps */}
       {[
-        [250, 660, 1],
-        [560, 686, 1.3],
-        [900, 668, 1.1],
-        [1230, 700, 1.45],
+        [150, 40],
+        [470, 18],
+        [760, -6],
+        [1050, -30],
+        [1340, -54],
+      ].map(([x, skew], i) => (
+        <path key={i} d={`M${x} 606 L${x + skew} 900 L${x + skew + 4} 900 L${x + 4} 606 Z`} fill={shade(crust, 0.5)} opacity="0.28" />
+      ))}
+
+      {/* wet sheen where the pans still hold water */}
+      <rect x="0" y="606" width="1440" height="120" fill={p.disc} opacity="0.06" filter="url(#soft)" />
+
+      {[
+        [250, 668, 1],
+        [560, 694, 1.3],
+        [900, 676, 1.1],
+        [1230, 710, 1.45],
       ].map(([x, y, s], i) => (
         <g key={i} transform={`translate(${x} ${y}) scale(${s})`}>
-          <path d="M-46 0 L0 -40 L46 0 Z" fill={p.near} />
-          <path d="M-46 0 L0 -40 L46 0 Z" fill="#fff" opacity={p.tintAlpha * 0.55} />
+          <path d="M-48 0 L0 -42 L48 0 Z" fill={mix(crust, "#ffffff", 0.22)} />
+          <path d="M0 -42 L48 0 L0 0 Z" fill={mix(crust, "#ffffff", 0.42)} />
+          <ellipse cx="0" cy="2" rx="48" ry="6" fill="#000" opacity="0.18" />
         </g>
       ))}
-      {/* flamingos, standing and reflected */}
+
       {[
-        [380, 790, 1],
-        [430, 806, 0.85],
-        [1020, 812, 1.15],
-        [1080, 796, 0.9],
-        [700, 840, 1.3],
+        [380, 800, 1],
+        [430, 816, 0.85],
+        [1020, 822, 1.15],
+        [1080, 806, 0.9],
+        [700, 850, 1.3],
       ].map(([x, y, s], i) => (
         <g key={i}>
-          <Flamingo x={x} y={y} s={s} fill={p.fg} />
-          <g opacity="0.18" transform={`translate(0 ${2 * (y + 16)}) scale(1 -1)`}>
-            <Flamingo x={x} y={y} s={s} fill={p.fg} />
+          <g transform={`translate(${x} ${y}) scale(${s})`}>
+            <path d="M0 0 l3 -22 q1 -8 8 -10 q7 -2 10 4 q-6 -1 -8 3 q-2 4 2 6 l-6 4 q-4 -3 -6 1 l-1 14 Z" fill={p.fg} />
+            <path d="M-4 -6 q8 -6 16 0 q-8 4 -16 0 Z" fill={mix(p.fg, tint, 0.4)} />
+            <rect x="-1" y="0" width="2" height="16" fill={p.fg} />
+            <rect x="4" y="0" width="2" height="16" fill={p.fg} />
+          </g>
+          <g transform={`translate(${x} ${y + 32}) scale(${s} ${-s * 0.6})`} opacity="0.22" filter="url(#waterBlur)">
+            <path d="M0 0 l3 -22 q1 -8 8 -10 q7 -2 10 4 q-6 -1 -8 3 q-2 4 2 6 l-6 4 q-4 -3 -6 1 l-1 14 Z" fill={p.fg} />
           </g>
         </g>
       ))}
-      {/* the narrow-gauge line that still crosses the lake */}
-      <g opacity="0.5">
-        <rect x="0" y="756" width="1440" height="3" fill={p.fg} />
+
+      <g opacity="0.45">
+        <rect x="0" y="760" width="1440" height="3" fill={p.fg} />
         {Array.from({ length: 40 }, (_, i) => (
-          <rect key={i} x={i * 36} y="750" width="6" height="15" fill={p.fg} />
+          <rect key={i} x={i * 36} y="754" width="6" height="15" fill={p.fg} />
         ))}
       </g>
+      <Birds x={220} y={220} s={1.3} fill={mix(p.far, p.skyMid, 0.35)} />
     </>
   );
 }
@@ -584,11 +712,35 @@ export default function SceneBackdrop({ scene = "night", theme = "thar-dhora" })
         <defs>
           <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={p.skyTop} />
-            <stop offset="55%" stopColor={p.skyMid} />
+            <stop offset="52%" stopColor={p.skyMid} />
             <stop offset="100%" stopColor={p.skyLow} />
           </linearGradient>
+          {/* Distant layers lose contrast toward their base: that is what makes
+              depth read, more than any amount of detail does. */}
+          <linearGradient id="farPaint" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={p.far} />
+            <stop offset="100%" stopColor={mix(p.far, p.skyLow, 0.38)} />
+          </linearGradient>
+          <linearGradient id="midPaint" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={mix(p.mid, p.skyLow, 0.22)} />
+            <stop offset="100%" stopColor={shade(p.mid, 0.18)} />
+          </linearGradient>
+          <linearGradient id="waterPaint" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={mix(p.water, p.skyLow, 0.42)} />
+            <stop offset="45%" stopColor={p.water} />
+            <stop offset="100%" stopColor={shade(p.water, 0.4)} />
+          </linearGradient>
+          <linearGradient id="saltPaint" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={mix(p.water, "#ffffff", 0.3)} />
+            <stop offset="40%" stopColor={p.water} />
+            <stop offset="100%" stopColor={shade(p.water, 0.34)} />
+          </linearGradient>
+          <linearGradient id="doorGlow" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ffd98a" stopOpacity={p.lampAlpha * 0.55} />
+            <stop offset="100%" stopColor="#f2a03c" stopOpacity={p.lampAlpha * 0.18} />
+          </linearGradient>
           <radialGradient id="discGlow">
-            <stop offset="0%" stopColor={p.discGlow} stopOpacity="0.75" />
+            <stop offset="0%" stopColor={p.discGlow} stopOpacity="0.8" />
             <stop offset="100%" stopColor={p.discGlow} stopOpacity="0" />
           </radialGradient>
           <radialGradient id="lampGlow">
@@ -600,8 +752,6 @@ export default function SceneBackdrop({ scene = "night", theme = "thar-dhora" })
             <stop offset="50%" stopColor="#000" stopOpacity="0" />
             <stop offset="100%" stopColor="#000" stopOpacity="0.8" />
           </radialGradient>
-          {/* A soft scrim right where the wordmark sits, so the type reads at
-              any time of day without dimming the whole illustration. */}
           <radialGradient id="titleScrim" cx="50%" cy="42%" r="46%">
             <stop offset="0%" stopColor="#0d0812" stopOpacity="0.62" />
             <stop offset="70%" stopColor="#0d0812" stopOpacity="0.28" />
@@ -611,6 +761,20 @@ export default function SceneBackdrop({ scene = "night", theme = "thar-dhora" })
             <stop offset="0%" stopColor="#150f18" stopOpacity="0" />
             <stop offset="100%" stopColor="#150f18" stopOpacity="0.95" />
           </linearGradient>
+          <linearGradient id="horizonHaze" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={p.skyLow} stopOpacity="0" />
+            <stop offset="60%" stopColor={p.skyLow} stopOpacity="0.55" />
+            <stop offset="100%" stopColor={p.skyLow} stopOpacity="0" />
+          </linearGradient>
+          <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="14" />
+          </filter>
+          <filter id="waterBlur" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3.5" />
+          </filter>
+          <filter id="cloudBlur" x="-30%" y="-60%" width="160%" height="260%">
+            <feGaussianBlur stdDeviation="18" />
+          </filter>
         </defs>
 
         <rect width="1440" height="900" fill="url(#sky)" />
@@ -621,18 +785,35 @@ export default function SceneBackdrop({ scene = "night", theme = "thar-dhora" })
               key={i}
               cx={cx}
               cy={cy}
-              r={i % 4 === 0 ? 1.9 : 1.2}
+              r={i % 4 === 0 ? 1.9 : 1.1}
               fill="#f6e8d0"
               opacity={p.stars}
               style={{ animation: `twinkle ${3 + (i % 5)}s ease-in-out ${i * 0.31}s infinite` }}
             />
           ))}
 
-        <circle cx="1090" cy={p.discY} r={p.discR * 5} fill="url(#discGlow)" />
-        <circle cx="1090" cy={p.discY} r={p.discR} fill={p.disc} opacity="0.92" />
+        {p.clouds > 0.15 &&
+          CLOUDS.map(([cx, cy, rx, ry], i) => (
+            <ellipse
+              key={i}
+              cx={cx}
+              cy={cy}
+              rx={rx}
+              ry={ry}
+              fill={mix(p.skyMid, "#ffffff", 0.35)}
+              opacity={p.clouds * 0.22}
+              filter="url(#cloudBlur)"
+            />
+          ))}
+
+        <circle cx={LIGHT_X} cy={p.discY} r={p.discR * 5.5} fill="url(#discGlow)" />
+        <circle cx={LIGHT_X} cy={p.discY} r={p.discR} fill={p.disc} opacity="0.94" />
 
         <Scene p={p} tint={t.tint} />
 
+        {/* A thin band of haze on the horizon. Kept weak on purpose: at any
+            real strength it flattens the whole picture instead of deepening it. */}
+        <rect y="520" width="1440" height="120" fill="url(#horizonHaze)" opacity="0.2" />
         <rect width="1440" height="900" fill="url(#vignette)" />
         <rect width="1440" height="900" fill="url(#titleScrim)" />
         <rect y="700" width="1440" height="200" fill="url(#baseFade)" />
