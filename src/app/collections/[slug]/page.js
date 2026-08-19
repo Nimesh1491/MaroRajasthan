@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
+import CoverArt from "@/components/CoverArt";
 import { PlayCollectionButton, TrackRow } from "@/components/PlayButtons";
 import { COLLECTIONS, collectionBySlug, getCatalogue } from "@/data/catalogue";
 
@@ -58,16 +59,44 @@ export default async function CollectionPage({ params }) {
           <span className="text-cream/70">{collection.latin}</span>
         </nav>
 
-        <h1 className="mt-7 font-devanagari text-4xl leading-tight text-cream sm:text-6xl sm:leading-none">
-          {collection.dev}
-        </h1>
-        <p className="mt-4 text-xl text-cream/85">{collection.latin}</p>
-        <p className="mt-1.5 text-sm text-cream/50">
-          {collection.count} songs · {collection.minutes} min
-        </p>
+        {/* A phone reads this the way it reads an album: sleeve, title, and one
+            button the width of the screen. */}
+        <div className="mx-auto mt-6 flex max-w-md flex-col items-center text-center desk:hidden">
+          <CoverArt
+            youtubeId={songs[0]?.youtubeId}
+            alt=""
+            eager
+            className="aspect-square w-[62vw] max-w-[16rem] rounded-2xl border border-cream/12 shadow-[0_26px_60px_-24px_rgba(0,0,0,0.95)]"
+          />
+          <h1 className="mt-5 font-devanagari text-3xl leading-tight text-cream">
+            {collection.dev}
+          </h1>
+          <p className="mt-2 text-base text-cream/85">{collection.latin}</p>
+          <p className="mt-1 font-mono text-[11px] text-cream/45">
+            {collection.count} songs · {collection.minutes} min
+          </p>
+          <div className="mt-5 w-full">
+            <PlayCollectionButton
+              songs={queue}
+              collection={meta}
+              label="Play the collection"
+              className="w-full justify-center py-3 sm:w-auto sm:px-8"
+            />
+          </div>
+        </div>
 
-        <div className="mt-8">
-          <PlayCollectionButton songs={queue} collection={meta} />
+        <div className="hidden desk:block">
+          <h1 className="mt-7 font-devanagari text-4xl leading-tight text-cream sm:text-6xl sm:leading-none">
+            {collection.dev}
+          </h1>
+          <p className="mt-4 text-xl text-cream/85">{collection.latin}</p>
+          <p className="mt-1.5 text-sm text-cream/50">
+            {collection.count} songs · {collection.minutes} min
+          </p>
+
+          <div className="mt-8">
+            <PlayCollectionButton songs={queue} collection={meta} />
+          </div>
         </div>
 
         <p className="mt-10 text-lg leading-relaxed text-cream/85">

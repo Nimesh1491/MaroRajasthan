@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import SceneBackdrop from "./SceneBackdrop";
 import StationMark from "./StationMark";
+import MobileHome from "./MobileHome";
 import { useStation } from "./Station";
 import { THEMES, themeForTime } from "@/data/themes";
 import { greetingForHour, indianNumber, istParts, sceneForHour } from "@/lib/ist";
@@ -46,6 +47,7 @@ export default function Hero({ initial, collections }) {
       setNow({ clock: p.clock, date: p.date, hour: p.hour24 });
       setCount(listenerCount(d));
 
+
       const next = themeForTime(d.getTime(), off).slug;
       setTheme((cur) => {
         if (cur === next) return cur;
@@ -72,19 +74,30 @@ export default function Hero({ initial, collections }) {
 
   return (
     <section className="relative min-h-screen overflow-hidden">
-      {/* The slideshow: the arriving scene fades in over the one it replaces. */}
+      {/* The slideshow: the arriving scene fades in over the one it replaces.
+          A desktop only — a phone and a tablet get काका and a plain ink page
+          instead. The markup is still in the page there, just not shown:
+          deciding by width in JS would mean a hydration mismatch, or a flash of
+          the wrong one. */}
       {outgoing && (
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 hidden desk:block">
           <SceneBackdrop scene={scene} theme={outgoing} />
         </div>
       )}
-      <div key={theme} className="absolute inset-0 scene-fade">
+      <div key={theme} className="absolute inset-0 hidden scene-fade desk:block">
         <SceneBackdrop scene={scene} theme={theme} />
       </div>
 
-      {/* The two corners. On a phone they cannot float over the wordmark, so
-          they become an ordinary stacked header and the centre starts below. */}
-      <div className="relative z-20 flex flex-col gap-5 px-5 pt-5 sm:absolute sm:inset-x-0 sm:top-7 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-8 sm:pt-0">
+      {/* A phone or a tablet gets a player's home screen, not the poster. */}
+      <MobileHome
+        now={now}
+        count={count}
+        greeting={greeting}
+        collections={collections}
+      />
+
+      {/* The two corners of the poster — a desktop only. */}
+      <div className="absolute inset-x-0 top-7 z-20 hidden gap-4 px-8 desk:flex desk:flex-row desk:items-start desk:justify-between">
       <div>
         <p className="font-mono text-xl leading-none text-cream drop-shadow sm:text-2xl">
           {now.clock}
@@ -134,8 +147,8 @@ export default function Hero({ initial, collections }) {
       </div>
       </div>
 
-      {/* centre */}
-      <div className="relative z-10 flex min-h-[72vh] flex-col items-center justify-center px-4 pb-16 pt-10 text-center sm:min-h-screen sm:px-6 sm:py-24">
+      {/* centre — the poster, a desktop only */}
+      <div className="relative z-10 hidden min-h-screen flex-col items-center justify-center px-6 py-24 text-center desk:flex">
         <StationMark size={64} />
 
         <h1 className="mt-4 font-devanagari text-4xl leading-[0.95] text-cream drop-shadow-[0_2px_18px_rgba(0,0,0,0.65)] sm:text-6xl">

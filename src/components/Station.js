@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import MobilePlayer from "./MobilePlayer";
 import { fmtClock as fmt, ytMusicLink } from "@/lib/links";
 
 const StationContext = createContext(null);
@@ -51,12 +52,23 @@ export function StationProvider({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [shuffle, setShuffle] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  // The phone's now-playing sheet. Desktop never opens it; there the docked bar
+  // is already showing everything the sheet would.
+  const [expanded, setExpanded] = useState(false);
   // Some uploads refuse to be embedded. The station skips past them rather
   // than sitting on a dead track.
   const [blocked, setBlocked] = useState([]);
 
   const playerRef = useRef(null);
   const hostRef = useRef(null);
+  // The stage: one fixed box that the single YouTube player lives in, moved over
+  // whichever slot is currently on screen. The player cannot be re-parented —
+  // moving an iframe in the DOM reloads it and playback would restart — so the
+  // slots are empty placeholders and it is the stage that travels.
+  const stageRef = useRef(null);
+  const stageInnerRef = useRef(null);
+  const dockSlotRef = useRef(null);
+  const videoSlotsRef = useRef({});
   const pendingRef = useRef(null);
   const queueRef = useRef([]);
   const indexRef = useRef(0);
@@ -288,6 +300,97 @@ export function StationProvider({ children }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [started, toggle]);
 
+  /**
+   * A slot claims the video.
+   *
+   * Callers hand over the element the player should sit over, and hand over null
+   * when it goes away. The station takes the highest-priority slot that is
+   * actually laid out, so the sheet wins over the mini player and the docked bar
+   * takes it when neither is up.
+   *
+   * `fit: "cover"` fills the slot and crops the sides, which is what a square
+   * thumbnail wants; the default fits the whole 16:9 frame inside it.
+   */
+  const setVideoSlot = useCallback((key, el, opts = {}) => {
+    if (el) videoSlotsRef.current[key] = { el, fit: opts.fit || "contain" };
+    else delete videoSlotsRef.current[key];
+  }, []);
+
+  // Keep the stage over whichever slot owns the video. This is a frame loop
+  // rather than a set of listeners because the sheet arrives on an animation and
+  // can be dragged down under the finger: the slot keeps moving, and the video
+  // has to travel with it. Nothing is written unless the rectangle changed.
+  useEffect(() => {
+    if (!started) return;
+    const order = ["sheet", "mini", "dock"];
+    let raf = 0;
+    let last = "";
+
+    const place = () => {
+      raf = requestAnimationFrame(place);
+      const stage = stageRef.current;
+      const inner = stageInnerRef.current;
+      if (!stage || !inner) return;
+
+      let slot = null;
+      for (const key of order) {
+        const candidate =
+          key === "dock"
+            ? { el: dockSlotRef.current, fit: "contain" }
+            : videoSlotsRef.current[key];
+        if (!candidate?.el) continue;
+        const rect = candidate.el.getBoundingClientRect();
+        // Not laid out at all — display:none on the wrong breakpoint — so it
+        // cannot hold anything.
+        if (rect.width < 1 || rect.height < 1) continue;
+        slot = { ...candidate, rect };
+        break;
+      }
+
+      if (!slot) {
+        if (last === "parked") return;
+        last = "parked";
+        stage.style.transform = "translate3d(-9999px, 0, 0)";
+        return;
+      }
+
+      const { rect: r, fit } = slot;
+      const signature = `${r.left},${r.top},${r.width},${r.height},${fit}`;
+      if (signature === last) return;
+      last = signature;
+
+      // The frame is 16:9 whatever the slot is: filling it, or fitted inside.
+      const unit =
+        fit === "cover"
+          ? Math.max(r.width / 16, r.height / 9)
+          : Math.min(r.width / 16, r.height / 9);
+
+      stage.style.transform = `translate3d(${r.left}px, ${r.top}px, 0)`;
+      stage.style.width = `${r.width}px`;
+      stage.style.height = `${r.height}px`;
+      stage.style.borderRadius = getComputedStyle(slot.el).borderRadius;
+      inner.style.width = `${unit * 16}px`;
+      inner.style.height = `${unit * 9}px`;
+    };
+
+    place();
+    return () => cancelAnimationFrame(raf);
+  }, [started]);
+
+  // Pages need room at the bottom for the phone's tab bar, and for the mini
+  // player once there is one. The measurement is the station's to give, not
+  // each page's to guess at; globals.css does the arithmetic.
+  useEffect(() => {
+    document.body.dataset.player = started ? "on" : "off";
+  }, [started]);
+
+  // Deliberately no Media Session here. Publishing our own metadata and
+  // play/pause handlers looks like the obvious way to get lock-screen controls,
+  // but the audio is inside a cross-origin iframe that runs its own session:
+  // the two then disagree about what is playing, and the notification pauses a
+  // track that is still going. YouTube's embed already puts its own controls in
+  // the shade, so it is left to do that.
+
   // Pending intent, if a page asked to play before the API finished loading.
   useEffect(() => {
     if (pendingRef.current) {
@@ -307,6 +410,14 @@ export function StationProvider({ children }) {
       collection,
       blocked,
       shuffle,
+      time,
+      duration,
+      seek,
+      // The phone's sheet, opened from the mini player or the tab bar.
+      expanded,
+      setExpanded,
+      // How a slot asks for the video; see setVideoSlot.
+      setVideoSlot,
       play,
       playAt,
       goTo,
@@ -324,12 +435,17 @@ export function StationProvider({ children }) {
       collection,
       blocked,
       shuffle,
+      time,
+      duration,
+      seek,
+      expanded,
       play,
       playAt,
       goTo,
       toggle,
       toggleShuffle,
       advance,
+      setVideoSlot,
     ]
   );
 
@@ -337,10 +453,40 @@ export function StationProvider({ children }) {
     <StationContext.Provider value={value}>
       {children}
 
-      {/* The docked bar. Mounted only once the station starts, and kept
-          mounted across route changes so playback survives navigation. */}
+      {/* The video, the only copy of it. It never moves in the DOM — that would
+          reload the iframe and restart the track — so it is a fixed box that is
+          walked over whichever slot claims it: the sheet's frame, the mini
+          player's thumbnail, or the docked bar's corner. Parked far off-screen
+          when nothing wants it, never hidden.
+
+          Pointer events are off all the way down, which keeps YouTube's own
+          share button and "more videos" overlay from ever coming up, and leaves
+          taps and swipes to the sheet underneath. */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-50 flex justify-center px-3 pb-3 transition-all duration-300 ${
+        ref={stageRef}
+        aria-hidden="true"
+        className="pointer-events-none fixed left-0 top-0 z-[80] overflow-hidden bg-black"
+        style={{ width: 0, height: 0, transform: "translate3d(-9999px, 0, 0)" }}
+      >
+        <div
+          ref={stageInnerRef}
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        >
+          <div ref={hostRef} className="h-full w-full" />
+        </div>
+      </div>
+
+      {/* On a phone or tablet the station is dressed as a music player: a mini
+          above the tab bar, and the now-playing sheet it opens into. The bar
+          below keeps the iframe either way. */}
+      <MobilePlayer s={value} />
+
+      {/* The docked bar. Mounted only once the station starts, and kept
+          mounted across route changes so playback survives navigation. On
+          a phone or tablet it is moved out of view rather than hidden — see
+          globals.css. */}
+      <div
+        className={`dock-desktop fixed inset-x-0 bottom-0 z-50 flex justify-center px-3 pb-3 transition-all duration-300 ${
           started ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-6 opacity-0"
         }`}
       >
@@ -397,21 +543,21 @@ export function StationProvider({ children }) {
           )}
 
           <div className="relative flex">
-            {/* The video. Pointer events are blocked over it so YouTube's own
-                share button and "more videos" overlay never come up.
-                On a phone, and when collapsed, it is moved out of view rather
-                than hidden or shrunk to nothing — a display:none or zero-size
-                iframe can suspend playback, whereas a clipped one keeps going. */}
+            {/* Where the video goes, not the video itself: the player lives in
+                the stage below and is positioned over whichever slot is on
+                screen. When collapsed — and on a phone or tablet, where the
+                sheet has its own slot — this one is moved out of view rather
+                than hidden or shrunk to nothing, and the stage follows it out.
+                A display:none or zero-size iframe can suspend playback, whereas
+                a clipped one keeps going. */}
             <div
-              className={`aspect-video w-[210px] shrink-0 bg-black ${
+              ref={dockSlotRef}
+              className={`aspect-video w-[210px] shrink-0 rounded-l-2xl bg-black ${
                 collapsed
                   ? "absolute -left-[9999px] top-0"
-                  : "absolute -left-[9999px] top-0 sm:relative sm:left-auto sm:top-auto"
+                  : "absolute -left-[9999px] top-0 desk:relative desk:left-auto desk:top-auto"
               }`}
-            >
-              <div ref={hostRef} className="pointer-events-none h-full w-full" />
-              <div className="absolute inset-0 z-10" aria-hidden="true" />
-            </div>
+            />
 
             <div className="min-w-0 flex-1 px-3 py-3 sm:px-5">
               <div className="flex items-start justify-between gap-3">

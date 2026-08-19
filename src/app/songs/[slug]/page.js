@@ -96,13 +96,19 @@ export default async function SongPage({ params }) {
         </h1>
         {song.dev && <p className="mt-3 text-lg text-cream/80">{song.latin}</p>}
 
+        {/* Full-width buttons on a phone, as an app would give them. */}
         <div className="mt-8 flex flex-wrap items-center gap-2.5">
-          <PlaySongButton song={song} songs={queue} collection={meta} />
+          <PlaySongButton
+            song={song}
+            songs={queue}
+            collection={meta}
+            className="w-full justify-center py-3 sm:w-auto sm:py-2.5"
+          />
           <a
             href={ytMusicLink(song)}
             target="_blank"
             rel="noreferrer"
-            className="rounded-full border border-cream/22 px-4 py-2.5 text-sm text-cream/85 transition hover:border-cream/55 hover:text-cream"
+            className="w-full rounded-full border border-cream/22 px-4 py-3 text-center text-sm text-cream/85 transition hover:border-cream/55 hover:text-cream sm:w-auto sm:py-2.5"
           >
             YouTube Music ↗
           </a>
