@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
+import CoverArt from "@/components/CoverArt";
 import { getCatalogue } from "@/data/catalogue";
 
 // Next requires this to be a literal, so it cannot import the shared
@@ -57,9 +58,16 @@ export default async function SongsPage() {
             <li key={s.slug}>
               <Link
                 href={`/songs/${s.slug}`}
-                className="flex items-baseline gap-5 border-b border-cream/8 py-4 transition hover:bg-cream/[0.03]"
+                className="flex items-center gap-3 border-b border-cream/8 py-3 transition hover:bg-cream/[0.03] desk:items-baseline desk:gap-5 desk:py-4"
               >
-                <span className="w-12 shrink-0 font-mono text-xs text-cream/35">
+                {/* The sleeve stands in for the year column on a phone, where a
+                    list of records should look like one. */}
+                <CoverArt
+                  youtubeId={s.youtubeId}
+                  alt=""
+                  className="h-12 w-12 shrink-0 rounded-lg border border-cream/10 desk:hidden"
+                />
+                <span className="hidden w-12 shrink-0 font-mono text-xs text-cream/35 sm:block">
                   {s.year || "trad."}
                 </span>
                 <span className="min-w-0 flex-1">
@@ -80,6 +88,9 @@ export default async function SongsPage() {
                 </span>
                 <span className="hidden max-w-[13rem] shrink-0 truncate text-right text-xs text-cream/40 sm:block">
                   {s.singers}
+                </span>
+                <span className="shrink-0 font-mono text-[10px] text-cream/30 desk:hidden">
+                  {s.year || "trad."}
                 </span>
               </Link>
             </li>

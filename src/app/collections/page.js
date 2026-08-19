@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
+import CoverArt from "@/components/CoverArt";
 import { getCatalogue } from "@/data/catalogue";
 
 // Next requires this to be a literal, so it cannot import the shared
@@ -46,11 +47,19 @@ export default async function CollectionsPage() {
               className="block rounded-2xl border border-cream/12 bg-ink2/50 p-5 transition hover:border-marigold/40 hover:bg-ink2/80 sm:p-7"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2 sm:gap-3">
-                <div>
-                  <h2 className="font-devanagari text-2xl text-cream sm:text-3xl">
-                    {c.dev}
-                  </h2>
-                  <p className="mt-1 text-cream/70">{c.latin}</p>
+                <div className="flex min-w-0 items-center gap-3">
+                  {/* On a phone a collection should look like a record. */}
+                  <CoverArt
+                    youtubeId={c.songs[0]?.youtubeId}
+                    alt=""
+                    className="h-14 w-14 shrink-0 rounded-xl border border-cream/10 desk:hidden"
+                  />
+                  <div className="min-w-0">
+                    <h2 className="font-devanagari text-2xl text-cream sm:text-3xl">
+                      {c.dev}
+                    </h2>
+                    <p className="mt-1 text-cream/70">{c.latin}</p>
+                  </div>
                 </div>
                 <p className="font-mono text-[11px] tracking-[0.16em] text-cream/40">
                   {c.count} SONGS · {c.minutes} MIN

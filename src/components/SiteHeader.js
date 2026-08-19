@@ -3,7 +3,7 @@ import StationMark from "./StationMark";
 
 export default function SiteHeader() {
   return (
-    <header className="sticky top-0 z-40 border-b border-cream/10 bg-ink/85 backdrop-blur">
+    <header className="app-safe-top sticky top-0 z-40 border-b border-cream/10 bg-ink/85 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-6 sm:py-3.5">
         <Link
           href="/"
@@ -21,7 +21,9 @@ export default function SiteHeader() {
             </span>
           </span>
         </Link>
-        <nav className="flex shrink-0 items-center gap-2 text-sm">
+        {/* On a phone or tablet these two live in the tab bar at the bottom, where a
+            thumb can reach them, so the header keeps only the wordmark. */}
+        <nav className="hidden shrink-0 items-center gap-2 text-sm desk:flex">
           <Link
             href="/collections"
             className="rounded-full border border-cream/20 px-3 py-1.5 text-[13px] text-cream/85 transition hover:border-cream/50 hover:text-cream sm:px-4 sm:text-sm"

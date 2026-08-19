@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import CoverArt from "./CoverArt";
+import { Equalizer } from "./MobilePlayer";
 import { useStation } from "./Station";
 
 const PlayIcon = ({ size = 13 }) => (
@@ -15,12 +17,13 @@ export function PlayCollectionButton({
   songs,
   collection,
   label = "Play this collection",
+  className = "",
 }) {
   const station = useStation();
   return (
     <button
       onClick={() => station.play(songs, 0, collection)}
-      className="inline-flex items-center gap-2.5 rounded-full bg-lac px-5 py-2.5 text-sm font-medium text-cream transition hover:bg-[#d82049]"
+      className={`inline-flex items-center gap-2.5 rounded-full bg-lac px-5 py-2.5 text-sm font-medium text-cream transition hover:bg-[#d82049] ${className}`}
     >
       <PlayIcon />
       {label}
@@ -34,13 +37,14 @@ export function PlaySongButton({
   songs,
   collection,
   label = "Play in the baithak",
+  className = "",
 }) {
   const station = useStation();
   const queue = songs?.length ? songs : [song];
   return (
     <button
       onClick={() => station.playAt(queue, song.slug, collection)}
-      className="inline-flex items-center gap-2.5 rounded-full bg-lac px-5 py-2.5 text-sm font-medium text-cream transition hover:bg-[#d82049]"
+      className={`inline-flex items-center gap-2.5 rounded-full bg-lac px-5 py-2.5 text-sm font-medium text-cream transition hover:bg-[#d82049] ${className}`}
     >
       <PlayIcon />
       {label}
@@ -58,14 +62,33 @@ export function TrackRow({ song, n, songs, collection }) {
 
   return (
     <li
-      className={`group flex items-center gap-4 border-b border-cream/8 py-3.5 transition ${
+      className={`group flex items-center gap-3 border-b border-cream/8 py-3 transition desk:gap-4 desk:py-3.5 ${
         isCurrent ? "bg-cream/[0.04]" : "hover:bg-cream/[0.03]"
       }`}
     >
+      {/* A phone gets the sleeve, which is both the artwork and the play
+          button; a mouse gets the running number that turns into one. */}
       <button
         onClick={() => station.playAt(songs, song.slug, collection)}
         aria-label={`Play ${song.latin}`}
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs text-cream/40 transition group-hover:bg-lac group-hover:text-cream"
+        className="relative shrink-0 desk:hidden"
+      >
+        <CoverArt
+          youtubeId={song.youtubeId}
+          alt=""
+          className="h-12 w-12 rounded-lg border border-cream/10"
+        />
+        {isCurrent && (
+          <span className="absolute inset-0 grid place-items-center rounded-lg bg-ink/65 text-cream">
+            {station.playing ? <Equalizer /> : <PlayIcon size={13} />}
+          </span>
+        )}
+      </button>
+
+      <button
+        onClick={() => station.playAt(songs, song.slug, collection)}
+        aria-label={`Play ${song.latin}`}
+        className="hidden h-7 w-7 shrink-0 place-items-center rounded-full text-xs text-cream/40 transition group-hover:bg-lac group-hover:text-cream desk:grid"
       >
         <span className="group-hover:hidden">
           {isCurrent && station.playing ? "▮▮" : n}

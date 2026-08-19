@@ -130,3 +130,179 @@ input[type="range"].seek::-moz-range-thumb {
   background: var(--color-lac);
   color: var(--color-cream);
 }
+
+/* ---------------------------------------------------------------------------
+   The app dress: phones and tablets
+   ---------------------------------------------------------------------------
+   On a phone or a tablet the station stops being a page and becomes a music
+   player — a bottom tab bar, a mini player docked above it, and a full-screen
+   now-playing sheet. A desktop keeps the poster.
+
+   The line is drawn twice, and the two must stay in step:
+
+     desk  — a desktop. 1024px and up with a mouse, or anything at all from
+             1367px. Everything the poster needs is written `desk:`.
+     the media query below — the same thing inverted, for the plain CSS that
+             cannot be written as a utility.
+
+   The width alone is not enough: an iPad in landscape is 1024px or 1180px wide
+   and is still an iPad, so a coarse primary pointer keeps the app dress up to
+   1366px. A desktop reports a fine pointer and is unaffected.
+--------------------------------------------------------------------------- */
+@custom-variant desk {
+  @media (min-width: 1024px) and (pointer: fine) {
+    @slot;
+  }
+
+  @media (min-width: 1367px) {
+    @slot;
+  }
+}
+
+:root {
+  --tabbar-h: 3.8rem;
+  --mini-h: 4.3rem;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+body {
+  /* Taps should feel like an app's, not a web page's. */
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+/* Everything that is not `desk`. Keep in step with the variant above. */
+@media (max-width: 1023.98px), (max-width: 1366px) and (pointer: coarse) {
+  /* Room for the tab bar, and for the mini player once something is playing.
+     The attribute is set by the station, not by the page. */
+  body {
+    padding-bottom: calc(var(--tabbar-h) + var(--safe-b));
+  }
+
+  body[data-player="on"] {
+    padding-bottom: calc(var(--tabbar-h) + var(--mini-h) + var(--safe-b));
+  }
+
+  /* The docked bar carries the live iframe, so where the mini player takes over
+     the controls it is moved out of view rather than hidden. A display:none or
+     zero-size iframe can suspend playback. */
+  .dock-desktop {
+    left: -9999px;
+    right: auto;
+    width: 100%;
+  }
+}
+
+.app-tabbar {
+  padding-bottom: var(--safe-b);
+}
+
+.app-mini {
+  bottom: calc(var(--tabbar-h) + var(--safe-b));
+}
+
+.app-safe-top {
+  padding-top: var(--safe-t);
+}
+
+/* The now-playing sheet arrives from the bottom, the way a sheet does. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* No fill mode. A filled animation keeps its last keyframe applied for the life
+   of the element, and a CSS animation outranks an inline style — which would
+   leave the sheet unable to follow a finger dragging it down. */
+.app-sheet {
+  animation: sheet-up 0.28s cubic-bezier(0.22, 0.9, 0.24, 1);
+  overscroll-behavior: none;
+}
+
+/* The queue slides up inside the sheet. */
+.app-subsheet {
+  animation: sheet-up 0.22s cubic-bezier(0.22, 0.9, 0.24, 1) both;
+}
+
+/* The sleeve turns while a track plays, the way the record would. */
+@keyframes sleeve-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sleeve-spin {
+  animation: sleeve-spin 26s linear infinite;
+}
+
+/* Three bars, to mark the row that is playing. */
+@keyframes eq-bar {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.eq span {
+  animation: eq-bar 0.9s ease-in-out infinite;
+  transform-origin: bottom;
+}
+
+.eq span:nth-child(2) {
+  animation-duration: 0.7s;
+  animation-delay: -0.2s;
+}
+
+.eq span:nth-child(3) {
+  animation-duration: 1.15s;
+  animation-delay: -0.5s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sheet,
+  .app-subsheet {
+    animation-duration: 0.01ms;
+  }
+
+  .sleeve-spin,
+  .eq span {
+    animation: none;
+  }
+}
+
+/* A fatter seek bar for thumbs. */
+input[type="range"].seek-fat::-webkit-slider-runnable-track {
+  height: 5px;
+}
+
+input[type="range"].seek-fat::-webkit-slider-thumb {
+  margin-top: -6px;
+  height: 17px;
+  width: 17px;
+}
+
+input[type="range"].seek-fat::-moz-range-track {
+  height: 5px;
+}
+
+input[type="range"].seek-fat::-moz-range-thumb {
+  height: 17px;
+  width: 17px;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
